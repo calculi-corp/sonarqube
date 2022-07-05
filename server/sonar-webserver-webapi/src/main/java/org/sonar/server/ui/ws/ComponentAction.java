@@ -49,7 +49,6 @@ import org.sonar.db.measure.LiveMeasureDto;
 import org.sonar.db.permission.GlobalPermission;
 import org.sonar.db.property.PropertyDto;
 import org.sonar.db.property.PropertyQuery;
-import org.sonar.db.qualitygate.QualityGateDto;
 import org.sonar.db.qualityprofile.QProfileDto;
 import org.sonar.server.component.ComponentFinder;
 import org.sonar.server.exceptions.BadRequestException;
@@ -259,11 +258,10 @@ public class ComponentAction implements NavigationWsAction {
   }
 
   private void writeQualityGate(JsonWriter json, DbSession session, ComponentDto component) {
-    QualityGateFinder.QualityGateData qualityGateData = qualityGateFinder.getQualityGate(session, component.uuid());
-    QualityGateDto qualityGateDto = qualityGateData.getQualityGate();
+    var qualityGateData = qualityGateFinder.getEffectiveQualityGate(session, component.uuid());
     json.name("qualityGate").beginObject()
-      .prop("key", qualityGateDto.getUuid())
-      .prop("name", qualityGateDto.getName())
+      .prop("key", qualityGateData.getUuid())
+      .prop("name", qualityGateData.getName())
       .prop("isDefault", qualityGateData.isDefault())
       .endObject();
   }

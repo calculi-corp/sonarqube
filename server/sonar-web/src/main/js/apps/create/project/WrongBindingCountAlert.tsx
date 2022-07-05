@@ -19,12 +19,12 @@
  */
 import * as React from 'react';
 import { FormattedMessage } from 'react-intl';
-import { Link } from 'react-router';
+import { Link } from 'react-router-dom';
 import { Alert } from '../../../components/ui/Alert';
 import { translate } from '../../../helpers/l10n';
 import { getGlobalSettingsUrl } from '../../../helpers/urls';
 import { AlmKeys } from '../../../types/alm-settings';
-import { ALM_INTEGRATION } from '../../settings/components/AdditionalCategoryKeys';
+import { ALM_INTEGRATION_CATEGORY } from '../../settings/constants';
 
 export interface WrongBindingCountAlertProps {
   alm: AlmKeys;
@@ -43,7 +43,9 @@ export default function WrongBindingCountAlert(props: WrongBindingCountAlertProp
           values={{
             alm: translate('onboarding.alm', alm),
             url: (
-              <Link to={getGlobalSettingsUrl(ALM_INTEGRATION)}>{translate('settings.page')}</Link>
+              <Link to={getGlobalSettingsUrl(ALM_INTEGRATION_CATEGORY)}>
+                {translate('settings.page')}
+              </Link>
             )
           }}
         />

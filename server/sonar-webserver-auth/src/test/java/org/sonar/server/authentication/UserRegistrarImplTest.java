@@ -51,7 +51,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.sonar.db.user.UserTesting.newUserDto;
-import static org.sonar.process.ProcessProperties.Property.ONBOARDING_TUTORIAL_SHOW_TO_NEW_USERS;
 import static org.sonar.server.authentication.event.AuthenticationEvent.Method.BASIC;
 
 public class UserRegistrarImplTest {
@@ -105,7 +104,6 @@ public class UserRegistrarImplTest {
     assertThat(user.getExternalLogin()).isEqualTo(USER_LOGIN);
     assertThat(user.getExternalIdentityProvider()).isEqualTo("github");
     assertThat(user.getExternalId()).isEqualTo("ABCD");
-    assertThat(user.isRoot()).isFalse();
     checkGroupMembership(user, defaultGroup);
   }
 
@@ -133,7 +131,6 @@ public class UserRegistrarImplTest {
     assertThat(user.getExternalIdentityProvider()).isEqualTo("sonarqube");
     assertThat(user.getExternalId()).isEqualTo("ABCD");
     assertThat(user.isLocal()).isFalse();
-    assertThat(user.isRoot()).isFalse();
     checkGroupMembership(user, defaultGroup);
   }
 
@@ -165,24 +162,6 @@ public class UserRegistrarImplTest {
 
     Optional<UserDto> user = db.users().selectUserByLogin(loggedInUser.getLogin());
     checkGroupMembership(user.get(), group1, group2, defaultGroup);
-  }
-
-  @Test
-  public void authenticate_new_user_sets_onboarded_flag_to_false_when_onboarding_setting_is_set_to_true() {
-    settings.setProperty(ONBOARDING_TUTORIAL_SHOW_TO_NEW_USERS.getKey(), true);
-
-    UserDto user = underTest.register(newUserRegistration());
-
-    assertThat(db.users().selectUserByLogin(user.getLogin()).get().isOnboarded()).isFalse();
-  }
-
-  @Test
-  public void authenticate_new_user_sets_onboarded_flag_to_true_when_onboarding_setting_is_set_to_false() {
-    settings.setProperty(ONBOARDING_TUTORIAL_SHOW_TO_NEW_USERS.getKey(), false);
-
-    UserDto user = underTest.register(newUserRegistration());
-
-    assertThat(db.users().selectUserByLogin(user.getLogin()).get().isOnboarded()).isTrue();
   }
 
   @Test
@@ -407,6 +386,24 @@ public class UserRegistrarImplTest {
   }
 
   @Test
+  public void authenticate_and_update_existing_github_user_matching_external_login_if_emails_match_case_insensitive() {
+    UserDto user = db.users().insertUser(u -> u
+      .setLogin("Old login")
+      .setName("Old name")
+      .setEmail("John@Email.com")
+      .setExternalId(USER_IDENTITY.getProviderId())
+      .setExternalLogin("old identity")
+      .setExternalIdentityProvider(GH_IDENTITY_PROVIDER.getKey()));
+
+    underTest.register(newUserRegistration());
+
+    assertThat(db.getDbClient().userDao().selectByUuid(db.getSession(), user.getUuid()))
+      .extracting(UserDto::getLogin, UserDto::getName, UserDto::getEmail, UserDto::getExternalId, UserDto::getExternalLogin, UserDto::getExternalIdentityProvider,
+        UserDto::isActive)
+      .contains(USER_LOGIN, "John", "john@email.com", "ABCD", "johndoo", "github", true);
+  }
+
+  @Test
   public void authenticate_and_update_existing_user_matching_external_login_and_emails_mismatch() {
     UserRegistration registration = UserRegistration.builder()
       .setUserIdentity(USER_IDENTITY)
@@ -498,7 +495,6 @@ public class UserRegistrarImplTest {
     assertThat(userDto.getExternalId()).isEqualTo(USER_IDENTITY.getProviderId());
     assertThat(userDto.getExternalLogin()).isEqualTo(USER_IDENTITY.getProviderLogin());
     assertThat(userDto.getExternalIdentityProvider()).isEqualTo(GH_IDENTITY_PROVIDER.getKey());
-    assertThat(userDto.isRoot()).isFalse();
   }
 
   @Test

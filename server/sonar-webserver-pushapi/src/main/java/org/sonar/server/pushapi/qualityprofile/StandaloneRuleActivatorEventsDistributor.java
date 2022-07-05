@@ -22,8 +22,8 @@ package org.sonar.server.pushapi.qualityprofile;
 import java.util.ArrayList;
 import java.util.List;
 import org.sonar.api.server.ServerSide;
-import org.sonar.core.util.RuleActivationListener;
-import org.sonar.core.util.RuleSetChangedEvent;
+import org.sonar.core.util.rule.RuleActivationListener;
+import org.sonar.core.util.rule.RuleSetChangedEvent;
 
 @ServerSide
 public class StandaloneRuleActivatorEventsDistributor implements RuleActivatorEventsDistributor {

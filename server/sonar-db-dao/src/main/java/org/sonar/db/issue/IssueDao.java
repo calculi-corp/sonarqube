@@ -62,6 +62,10 @@ public class IssueDao implements Dao {
     return mapper(session).selectIssueKeysByComponentUuid(componentUuid);
   }
 
+  public Set<String> selectIssueKeysByComponentUuidAndChangedSinceDate(DbSession session, String componentUuid, long changedSince) {
+    return mapper(session).selectIssueKeysByComponentUuidAndChangedSinceDate(componentUuid, changedSince);
+  }
+
   public List<IssueDto> selectByComponentUuidPaginated(DbSession session, String componentUuid, int page) {
     return mapper(session).selectByComponentUuidPaginated(componentUuid, Pagination.forPage(page).andSize(DEFAULT_PAGE_SIZE));
   }
@@ -87,8 +91,12 @@ public class IssueDao implements Dao {
     return executeLargeInputs(componentUuids, mapper(dbSession)::selectOpenByComponentUuids);
   }
 
-  public Collection<IssueGroupDto> selectIssueGroupsByBaseComponent(DbSession dbSession, ComponentDto baseComponent, long leakPeriodBeginningDate) {
-    return mapper(dbSession).selectIssueGroupsByBaseComponent(baseComponent, leakPeriodBeginningDate);
+  public Collection<HotspotGroupDto> selectBranchHotspotsCount(DbSession dbSession, String branchUuid, long leakPeriodBeginningDate) {
+    return mapper(dbSession).selectBranchHotspotsCount(branchUuid, leakPeriodBeginningDate);
+  }
+
+  public Collection<IssueGroupDto> selectIssueGroupsByComponent(DbSession dbSession, ComponentDto component, long leakPeriodBeginningDate) {
+    return mapper(dbSession).selectIssueGroupsByComponent(component, leakPeriodBeginningDate);
   }
 
   public void insert(DbSession session, IssueDto dto) {
@@ -119,4 +127,12 @@ public class IssueDao implements Dao {
     return session.getMapper(IssueMapper.class);
   }
 
+  public List<IssueDto> selectByBranch(DbSession dbSession, IssueQueryParams issueQueryParams, int page) {
+    Pagination pagination = Pagination.forPage(page).andSize(DEFAULT_PAGE_SIZE);
+    return mapper(dbSession).selectByBranch(issueQueryParams, pagination);
+  }
+
+  public List<String> selectRecentlyClosedIssues(DbSession dbSession, IssueQueryParams issueQueryParams) {
+    return mapper(dbSession).selectRecentlyClosedIssues(issueQueryParams);
+  }
 }

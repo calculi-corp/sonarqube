@@ -82,7 +82,17 @@ When you create a user in SonarQube's own database, it is considered local and w
 
 Similarly, all non-local accounts will be authenticated only against the external tool. 
 
-An Administrator can manage tokens on a user's behalf via **[Administration > Security > Users](/#sonarqube-admin#/admin/users)**. From here, click in the user's **Tokens** column to see the user's existing tokens, and either revoke existing tokens or generate new ones. Once established, a token is the only credential needed to run an analysis. Tokens should be passed as the value of the `sonar.login` property.
+An Administrator can manage tokens on a user's behalf via **[Administration > Security > Users](/#sonarqube-admin#/admin/users)**. From here, click in the user's **Tokens** column to see the user's existing tokens, and either revoke existing tokens or generate new ones. 
+An Administrator can only create [user tokens](/user-guide/user-token/) on behalf of another user.
+Once established, a token is the only credential needed to run an analysis. Tokens should be passed as the value of the `sonar.login` property.
+
+### Token Maximum Lifetime
+
+*The ability to configure a maximum lifetime for tokens is available starting in [Enterprise Edition](https://redirect.sonarsource.com/editions/enterprise.html).*
+
+An Administrator can define a maximum lifetime for any *newly* generated token. Non-administrator users can also set a time-to-live, as long as it is less than or equal to the maximum lifetime set by the administrator. Tokens generated after updating this setting will expire either at the maximum lifetime set by the administrator or at the time set by the user, whichever comes first. See [Generating and Using Tokens](/user-guide/user-token/) documentation for more information.
+
+**Important note:** Updating this setting does *not* affect any existing tokens. It will only impact newly generated tokens.
 
 ### Default Admin Credentials
 When installing SonarQube, a default user with Administer System permission is created automatically:

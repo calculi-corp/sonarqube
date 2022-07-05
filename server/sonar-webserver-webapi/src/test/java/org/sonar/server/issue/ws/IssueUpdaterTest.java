@@ -33,7 +33,7 @@ import org.sonar.db.DbTester;
 import org.sonar.db.component.BranchType;
 import org.sonar.db.component.ComponentDto;
 import org.sonar.db.issue.IssueDto;
-import org.sonar.db.rule.RuleDefinitionDto;
+import org.sonar.db.rule.RuleDto;
 import org.sonar.db.user.UserDto;
 import org.sonar.server.es.EsTester;
 import org.sonar.server.issue.IssueFieldsSetter;
@@ -48,6 +48,7 @@ import org.sonar.server.issue.notification.IssuesChangesNotificationBuilder.User
 import org.sonar.server.issue.notification.IssuesChangesNotificationSerializer;
 import org.sonar.server.notification.NotificationManager;
 import org.sonar.server.rule.DefaultRuleFinder;
+import org.sonar.server.rule.RuleDescriptionFormatter;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -67,7 +68,6 @@ public class IssueUpdaterTest {
 
   private System2 system2 = mock(System2.class);
 
-
   @Rule
   public DbTester db = DbTester.create(system2);
 
@@ -84,7 +84,7 @@ public class IssueUpdaterTest {
   private TestIssueChangePostProcessor issueChangePostProcessor = new TestIssueChangePostProcessor();
   private IssuesChangesNotificationSerializer issuesChangesSerializer = new IssuesChangesNotificationSerializer();
   private IssueUpdater underTest = new IssueUpdater(dbClient,
-    new WebIssueStorage(system2, dbClient, new DefaultRuleFinder(dbClient), issueIndexer, new SequenceUuidFactory()), notificationManager,
+    new WebIssueStorage(system2, dbClient, new DefaultRuleFinder(dbClient, mock(RuleDescriptionFormatter.class)), issueIndexer, new SequenceUuidFactory()), notificationManager,
     issueChangePostProcessor, issuesChangesSerializer);
 
   @Test
@@ -103,7 +103,7 @@ public class IssueUpdaterTest {
   @Test
   public void verify_notification_without_resolution() {
     UserDto assignee = db.users().insertUser();
-    RuleDefinitionDto rule = db.rules().insertIssueRule();
+    RuleDto rule = db.rules().insertIssueRule();
     ComponentDto project = db.components().insertPublicProject();
     ComponentDto file = db.components().insertComponent(newFileDto(project));
     DefaultIssue issue = db.issues().insertIssue(rule, project, file,
@@ -132,7 +132,7 @@ public class IssueUpdaterTest {
   @Test
   public void verify_notification_with_resolution() {
     UserDto assignee = db.users().insertUser();
-    RuleDefinitionDto rule = db.rules().insertIssueRule();
+    RuleDto rule = db.rules().insertIssueRule();
     ComponentDto project = db.components().insertPublicProject();
     ComponentDto file = db.components().insertComponent(newFileDto(project));
     DefaultIssue issue = db.issues().insertIssue(rule, project, file,
@@ -160,7 +160,7 @@ public class IssueUpdaterTest {
 
   @Test
   public void verify_notification_on_branch() {
-    RuleDefinitionDto rule = db.rules().insertIssueRule();
+    RuleDto rule = db.rules().insertIssueRule();
     ComponentDto project = db.components().insertPublicProject();
     ComponentDto branch = db.components().insertProjectBranch(project, t -> t.setBranchType(BRANCH));
     ComponentDto file = db.components().insertComponent(newFileDto(branch));
@@ -188,7 +188,7 @@ public class IssueUpdaterTest {
 
   @Test
   public void verify_no_notification_on_pr() {
-    RuleDefinitionDto rule = db.rules().insertIssueRule();
+    RuleDto rule = db.rules().insertIssueRule();
     ComponentDto project = db.components().insertPublicProject();
     ComponentDto branch = db.components().insertProjectBranch(project, t -> t.setBranchType(BranchType.PULL_REQUEST));
     ComponentDto file = db.components().insertComponent(newFileDto(branch));
@@ -203,7 +203,7 @@ public class IssueUpdaterTest {
 
   @Test
   public void verify_notification_when_issue_is_linked_on_removed_rule() {
-    RuleDefinitionDto rule = db.rules().insertIssueRule(r -> r.setStatus(RuleStatus.REMOVED));
+    RuleDto rule = db.rules().insertIssueRule(r -> r.setStatus(RuleStatus.REMOVED));
     ComponentDto project = db.components().insertPublicProject();
     ComponentDto file = db.components().insertComponent(newFileDto(project));
     DefaultIssue issue = db.issues().insertIssue(rule, project, file, t -> t.setSeverity(MAJOR)).toDefaultIssue();
@@ -218,7 +218,7 @@ public class IssueUpdaterTest {
   @Test
   public void verify_notification_when_assignee_has_changed() {
     UserDto oldAssignee = db.users().insertUser();
-    RuleDefinitionDto rule = db.rules().insertIssueRule();
+    RuleDto rule = db.rules().insertIssueRule();
     ComponentDto project = db.components().insertPublicProject();
     ComponentDto file = db.components().insertComponent(newFileDto(project));
     DefaultIssue issue = db.issues().insertIssue(rule, project, file, t -> t.setAssigneeUuid(oldAssignee.getUuid()))
@@ -246,7 +246,7 @@ public class IssueUpdaterTest {
 
   @Test
   public void saveIssue_populates_specified_SearchResponseData_with_rule_project_and_component_retrieved_from_DB() {
-    RuleDefinitionDto rule = db.rules().insertIssueRule();
+    RuleDto rule = db.rules().insertIssueRule();
     ComponentDto project = db.components().insertPublicProject();
     ComponentDto file = db.components().insertComponent(newFileDto(project));
     IssueDto issueDto = db.issues().insertIssue(rule, project, file);
@@ -262,7 +262,7 @@ public class IssueUpdaterTest {
     assertThat(preloadedSearchResponseData.getIssues().iterator().next())
       .isNotSameAs(issueDto);
     assertThat(preloadedSearchResponseData.getRules())
-      .extracting(RuleDefinitionDto::getKey)
+      .extracting(RuleDto::getKey)
       .containsOnly(rule.getKey());
     assertThat(preloadedSearchResponseData.getComponents())
       .extracting(ComponentDto::uuid)
@@ -272,7 +272,7 @@ public class IssueUpdaterTest {
 
   @Test
   public void saveIssue_populates_specified_SearchResponseData_with_no_rule_but_with_project_and_component_if_rule_is_removed() {
-    RuleDefinitionDto rule = db.rules().insertIssueRule(r -> r.setStatus(RuleStatus.REMOVED));
+    RuleDto rule = db.rules().insertIssueRule(r -> r.setStatus(RuleStatus.REMOVED));
     ComponentDto project = db.components().insertPublicProject();
     ComponentDto file = db.components().insertComponent(newFileDto(project));
     IssueDto issueDto = db.issues().insertIssue(rule, project, file);

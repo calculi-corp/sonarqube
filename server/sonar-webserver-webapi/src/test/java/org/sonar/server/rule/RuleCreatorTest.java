@@ -23,7 +23,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Sets;
 import java.time.Instant;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
@@ -40,7 +39,6 @@ import org.sonar.core.util.SequenceUuidFactory;
 import org.sonar.core.util.UuidFactory;
 import org.sonar.db.DbSession;
 import org.sonar.db.DbTester;
-import org.sonar.db.rule.RuleDefinitionDto;
 import org.sonar.db.rule.RuleDto;
 import org.sonar.db.rule.RuleDto.Format;
 import org.sonar.db.rule.RuleParamDto;
@@ -52,16 +50,19 @@ import org.sonar.server.rule.index.RuleIndex;
 import org.sonar.server.rule.index.RuleIndexer;
 import org.sonar.server.rule.index.RuleQuery;
 
+import static java.util.Collections.singletonList;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.Assert.fail;
+import static org.sonar.db.rule.RuleDescriptionSectionDto.createDefaultRuleDescriptionSection;
+import static org.sonar.db.rule.RuleTesting.newCustomRule;
 import static org.sonar.db.rule.RuleTesting.newRule;
 import static org.sonar.server.util.TypeValidationsTesting.newFullTypeValidations;
 
 public class RuleCreatorTest {
 
-  private System2 system2 = new TestSystem2().setNow(Instant.now().toEpochMilli());
-
+  private final System2 system2 = new TestSystem2().setNow(Instant.now().toEpochMilli());
 
   @Rule
   public DbTester dbTester = DbTester.create(system2);
@@ -69,12 +70,12 @@ public class RuleCreatorTest {
   @Rule
   public EsTester es = EsTester.create();
 
-  private RuleIndex ruleIndex = new RuleIndex(es.client(), system2);
-  private RuleIndexer ruleIndexer = new RuleIndexer(es.client(), dbTester.getDbClient());
-  private DbSession dbSession = dbTester.getSession();
-  private UuidFactory uuidFactory = new SequenceUuidFactory();
+  private final RuleIndex ruleIndex = new RuleIndex(es.client(), system2);
+  private final RuleIndexer ruleIndexer = new RuleIndexer(es.client(), dbTester.getDbClient());
+  private final DbSession dbSession = dbTester.getSession();
+  private final UuidFactory uuidFactory = new SequenceUuidFactory();
 
-  private RuleCreator underTest = new RuleCreator(system2, new RuleIndexer(es.client(), dbTester.getDbClient()), dbTester.getDbClient(), newFullTypeValidations(), uuidFactory);
+  private final RuleCreator underTest = new RuleCreator(system2, new RuleIndexer(es.client(), dbTester.getDbClient()), dbTester.getDbClient(), newFullTypeValidations(), uuidFactory);
 
   @Test
   public void create_custom_rule() {
@@ -95,7 +96,7 @@ public class RuleCreatorTest {
     assertThat(rule.getPluginKey()).isEqualTo("sonarjava");
     assertThat(rule.getTemplateUuid()).isEqualTo(templateRule.getUuid());
     assertThat(rule.getName()).isEqualTo("My custom");
-    assertThat(rule.getDescription()).isEqualTo("Some description");
+    assertThat(rule.getDefaultRuleDescriptionSection().getContent()).isEqualTo("Some description");
     assertThat(rule.getSeverityString()).isEqualTo("MAJOR");
     assertThat(rule.getStatus()).isEqualTo(RuleStatus.READY);
     assertThat(rule.getLanguage()).isEqualTo("java");
@@ -130,7 +131,7 @@ public class RuleCreatorTest {
     RuleDto templateRule = createTemplateRule();
     NewCustomRule newRule = NewCustomRule.createForCustomRule("CUSTOM_RULE", templateRule.getKey())
       .setName("My custom")
-      .setHtmlDescription("Some description")
+      .setMarkdownDescription("some description")
       .setSeverity(Severity.MAJOR)
       .setStatus(RuleStatus.READY)
       .setParameters(ImmutableMap.of("regex", ""));
@@ -149,10 +150,10 @@ public class RuleCreatorTest {
   @Test
   public void create_custom_rule_with_no_parameter_value() {
     // insert template rule
-    RuleDefinitionDto templateRule = createTemplateRuleWithIntArrayParam();
+    RuleDto templateRule = createTemplateRuleWithIntArrayParam();
     NewCustomRule newRule = NewCustomRule.createForCustomRule("CUSTOM_RULE", templateRule.getKey())
       .setName("My custom")
-      .setHtmlDescription("Some description")
+      .setMarkdownDescription("some description")
       .setSeverity(Severity.MAJOR)
       .setStatus(RuleStatus.READY);
 
@@ -170,10 +171,10 @@ public class RuleCreatorTest {
   @Test
   public void create_custom_rule_with_multiple_parameter_values() {
     // insert template rule
-    RuleDefinitionDto templateRule = createTemplateRuleWithIntArrayParam();
+    RuleDto templateRule = createTemplateRuleWithIntArrayParam();
     NewCustomRule newRule = NewCustomRule.createForCustomRule("CUSTOM_RULE", templateRule.getKey())
       .setName("My custom")
-      .setHtmlDescription("Some description")
+      .setMarkdownDescription("some description")
       .setSeverity(Severity.MAJOR)
       .setStatus(RuleStatus.READY)
       .setParameters(ImmutableMap.of("myIntegers", "1,3"));
@@ -192,17 +193,17 @@ public class RuleCreatorTest {
   @Test
   public void batch_create_custom_rules() {
     // insert template rule
-    RuleDefinitionDto templateRule = createTemplateRuleWithIntArrayParam();
+    RuleDto templateRule = createTemplateRuleWithIntArrayParam();
 
     NewCustomRule firstRule = NewCustomRule.createForCustomRule("CUSTOM_RULE_1", templateRule.getKey())
       .setName("My custom")
-      .setHtmlDescription("Some description")
+      .setMarkdownDescription("some description")
       .setSeverity(Severity.MAJOR)
       .setStatus(RuleStatus.READY);
 
     NewCustomRule secondRule = NewCustomRule.createForCustomRule("CUSTOM_RULE_2", templateRule.getKey())
       .setName("My custom")
-      .setHtmlDescription("Some description")
+      .setMarkdownDescription("some description")
       .setSeverity(Severity.MAJOR)
       .setStatus(RuleStatus.READY);
 
@@ -219,28 +220,47 @@ public class RuleCreatorTest {
   @Test
   public void fail_to_create_custom_rules_when_wrong_rule_template() {
     // insert rule
-    RuleDefinitionDto rule = newRule(RuleKey.of("java", "S001")).setIsTemplate(false);
+    RuleDto rule = newRule(RuleKey.of("java", "S001")).setIsTemplate(false);
     dbTester.rules().insert(rule);
     dbSession.commit();
 
-    assertThatThrownBy(() -> {
-      // Create custom rule with unknown template rule
-      NewCustomRule newRule = NewCustomRule.createForCustomRule("CUSTOM_RULE", rule.getKey())
-        .setName("My custom")
-        .setHtmlDescription("Some description")
-        .setSeverity(Severity.MAJOR)
-        .setStatus(RuleStatus.READY)
-        .setParameters(ImmutableMap.of("regex", "a.*"));
-      underTest.create(dbSession, Collections.singletonList(newRule));
-    })
+    NewCustomRule newRule = NewCustomRule.createForCustomRule("CUSTOM_RULE", rule.getKey())
+      .setName("My custom")
+      .setMarkdownDescription("some description")
+      .setSeverity(Severity.MAJOR)
+      .setStatus(RuleStatus.READY)
+      .setParameters(ImmutableMap.of("regex", "a.*"));
+
+    assertThatThrownBy(() -> underTest.create(dbSession, singletonList(newRule)))
       .isInstanceOf(IllegalArgumentException.class)
       .hasMessage("This rule is not a template rule: java:S001");
   }
 
   @Test
+  public void fail_to_create_custom_rules_when_removed_rule_template() {
+    // insert rule
+    RuleDto rule = createTemplateRule();
+    newRule(RuleKey.of("java", "S001")).setIsTemplate(false);
+    rule.setStatus(RuleStatus.REMOVED);
+    dbTester.rules().update(rule);
+    dbSession.commit();
+
+    NewCustomRule newRule = NewCustomRule.createForCustomRule("CUSTOM_RULE", rule.getKey())
+      .setName("My custom")
+      .setMarkdownDescription("Some description")
+      .setSeverity(Severity.MAJOR)
+      .setStatus(RuleStatus.READY);
+
+    List<NewCustomRule> newRules = singletonList(newRule);
+    assertThatThrownBy(() -> underTest.create(dbSession, newRules))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("The template key doesn't exist: java:S001");
+  }
+
+  @Test
   public void fail_to_create_custom_rule_with_invalid_parameter() {
     // insert template rule
-    RuleDefinitionDto templateRule = createTemplateRuleWithIntArrayParam();
+    RuleDto templateRule = createTemplateRuleWithIntArrayParam();
 
     assertThatThrownBy(() -> {
       // Create custom rule
@@ -259,7 +279,7 @@ public class RuleCreatorTest {
   @Test
   public void fail_to_create_custom_rule_with_invalid_parameters() {
     // insert template rule
-    RuleDefinitionDto templateRule = createTemplateRuleWithTwoIntParams();
+    RuleDto templateRule = createTemplateRuleWithTwoIntParams();
 
     // Create custom rule
     NewCustomRule newRule = NewCustomRule.createForCustomRule("CUSTOM_RULE", templateRule.getKey())
@@ -277,22 +297,36 @@ public class RuleCreatorTest {
   }
 
   @Test
+  public void fail_to_create_custom_rule_with_empty_description() {
+    // insert template rule
+    RuleDto templateRule = createTemplateRuleWithTwoIntParams();
+
+    // Create custom rule
+    NewCustomRule newRule = NewCustomRule.createForCustomRule("CUSTOM_RULE", templateRule.getKey())
+      .setName("My custom")
+      .setMarkdownDescription("Some description")
+      .setSeverity(Severity.MAJOR)
+      .setStatus(RuleStatus.READY)
+      .setMarkdownDescription("");
+    assertThatExceptionOfType(BadRequestException.class)
+      .isThrownBy(() -> underTest.create(dbSession, newRule))
+      .withMessage("The description is missing");
+  }
+
+  @Test
   public void reactivate_custom_rule_if_already_exists_in_removed_status() {
     String key = "CUSTOM_RULE";
 
-    // insert template rule
     RuleDto templateRule = createTemplateRule();
 
-    // insert a removed rule
-    RuleDto rule = RuleTesting.newCustomRule(templateRule)
+    RuleDto rule = newCustomRule(templateRule, "Old description")
       .setRuleKey(key)
       .setStatus(RuleStatus.REMOVED)
       .setName("Old name")
-      .setDescription("Old description")
       .setDescriptionFormat(Format.MARKDOWN)
       .setSeverity(Severity.INFO);
-    dbTester.rules().insert(rule.getDefinition());
-    dbTester.rules().insertRuleParam(rule.getDefinition(), param -> param.setDefaultValue("a.*"));
+    dbTester.rules().insert(rule);
+    dbTester.rules().insertRuleParam(rule, param -> param.setDefaultValue("a.*"));
     dbSession.commit();
 
     // Create custom rule with same key, but with different values
@@ -304,13 +338,13 @@ public class RuleCreatorTest {
       .setParameters(ImmutableMap.of("regex", "c.*"));
     RuleKey customRuleKey = underTest.create(dbSession, newRule);
 
-    RuleDefinitionDto result = dbTester.getDbClient().ruleDao().selectOrFailDefinitionByKey(dbSession, customRuleKey);
+    RuleDto result = dbTester.getDbClient().ruleDao().selectOrFailByKey(dbSession, customRuleKey);
     assertThat(result.getKey()).isEqualTo(RuleKey.of("java", key));
     assertThat(result.getStatus()).isEqualTo(RuleStatus.READY);
 
     // These values should be the same than before
     assertThat(result.getName()).isEqualTo("Old name");
-    assertThat(result.getDescription()).isEqualTo("Old description");
+    assertThat(result.getDefaultRuleDescriptionSection().getContent()).isEqualTo("Old description");
     assertThat(result.getSeverityString()).isEqualTo(Severity.INFO);
 
     List<RuleParamDto> params = dbTester.getDbClient().ruleDao().selectRuleParamsByRuleKey(dbSession, customRuleKey);
@@ -321,23 +355,22 @@ public class RuleCreatorTest {
   @Test
   public void generate_reactivation_exception_when_rule_exists_in_removed_status_and_prevent_reactivation_parameter_is_true() {
     String key = "CUSTOM_RULE";
-    // insert template rule
+
     RuleDto templateRule = createTemplateRule();
-    // insert a removed rule
-    RuleDto rule = RuleTesting.newCustomRule(templateRule)
+
+    RuleDto rule = newCustomRule(templateRule, "Old description")
       .setRuleKey(key)
       .setStatus(RuleStatus.REMOVED)
       .setName("Old name")
-      .setDescription("Old description")
       .setSeverity(Severity.INFO);
-    dbTester.rules().insert(rule.getDefinition());
-    dbTester.rules().insertRuleParam(rule.getDefinition(), param -> param.setDefaultValue("a.*"));
+    dbTester.rules().insert(rule);
+    dbTester.rules().insertRuleParam(rule, param -> param.setDefaultValue("a.*"));
     dbSession.commit();
 
     // Create custom rule with same key, but with different values
     NewCustomRule newRule = NewCustomRule.createForCustomRule(key, templateRule.getKey())
       .setName("New name")
-      .setHtmlDescription("New description")
+      .setMarkdownDescription("some description")
       .setSeverity(Severity.MAJOR)
       .setStatus(RuleStatus.READY)
       .setParameters(ImmutableMap.of("regex", "c.*"))
@@ -358,15 +391,14 @@ public class RuleCreatorTest {
     // insert template rule
     RuleDto templateRule = createTemplateRule();
 
-    assertThatThrownBy(() -> {
-      NewCustomRule newRule = NewCustomRule.createForCustomRule("*INVALID*", templateRule.getKey())
-        .setName("My custom")
-        .setHtmlDescription("Some description")
-        .setSeverity(Severity.MAJOR)
-        .setStatus(RuleStatus.READY)
-        .setParameters(ImmutableMap.of("regex", "a.*"));
-      underTest.create(dbSession, newRule);
-    })
+    NewCustomRule newRule = NewCustomRule.createForCustomRule("*INVALID*", templateRule.getKey())
+      .setName("My custom")
+      .setMarkdownDescription("some description")
+      .setSeverity(Severity.MAJOR)
+      .setStatus(RuleStatus.READY)
+      .setParameters(ImmutableMap.of("regex", "a.*"));
+
+    assertThatThrownBy(() -> underTest.create(dbSession, newRule))
       .isInstanceOf(BadRequestException.class)
       .hasMessage("The rule key \"*INVALID*\" is invalid, it should only contain: a-z, 0-9, \"_\"");
   }
@@ -378,22 +410,21 @@ public class RuleCreatorTest {
     // Create a custom rule
     AtomicReference<NewCustomRule> newRule = new AtomicReference<>(NewCustomRule.createForCustomRule("CUSTOM_RULE", templateRule.getKey())
       .setName("My custom")
-      .setHtmlDescription("Some description")
+      .setMarkdownDescription("some description")
       .setSeverity(Severity.MAJOR)
       .setStatus(RuleStatus.READY)
       .setParameters(ImmutableMap.of("regex", "a.*")));
     underTest.create(dbSession, newRule.get());
 
-    assertThatThrownBy(() -> {
-      // Create another custom rule having same key
-      newRule.set(NewCustomRule.createForCustomRule("CUSTOM_RULE", templateRule.getKey())
-        .setName("My another custom")
-        .setHtmlDescription("Some description")
-        .setSeverity(Severity.MAJOR)
-        .setStatus(RuleStatus.READY)
-        .setParameters(ImmutableMap.of("regex", "a.*")));
-      underTest.create(dbSession, newRule.get());
-    })
+    // Create another custom rule having same key
+    newRule.set(NewCustomRule.createForCustomRule("CUSTOM_RULE", templateRule.getKey())
+      .setName("My another custom")
+      .setMarkdownDescription("some description")
+      .setSeverity(Severity.MAJOR)
+      .setStatus(RuleStatus.READY)
+      .setParameters(ImmutableMap.of("regex", "a.*")));
+
+    assertThatThrownBy(() -> underTest.create(dbSession, newRule.get()))
       .isInstanceOf(IllegalArgumentException.class)
       .hasMessage("A rule with the key 'CUSTOM_RULE' already exists");
   }
@@ -403,14 +434,13 @@ public class RuleCreatorTest {
     // insert template rule
     RuleDto templateRule = createTemplateRule();
 
-    assertThatThrownBy(() -> {
-      NewCustomRule newRule = NewCustomRule.createForCustomRule("CUSTOM_RULE", templateRule.getKey())
-        .setHtmlDescription("Some description")
-        .setSeverity(Severity.MAJOR)
-        .setStatus(RuleStatus.READY)
-        .setParameters(ImmutableMap.of("regex", "a.*"));
-      underTest.create(dbSession, newRule);
-    })
+    NewCustomRule newRule = NewCustomRule.createForCustomRule("CUSTOM_RULE", templateRule.getKey())
+      .setMarkdownDescription("some description")
+      .setSeverity(Severity.MAJOR)
+      .setStatus(RuleStatus.READY)
+      .setParameters(ImmutableMap.of("regex", "a.*"));
+
+    assertThatThrownBy(() -> underTest.create(dbSession, newRule))
       .isInstanceOf(BadRequestException.class)
       .hasMessage("The name is missing");
   }
@@ -437,14 +467,13 @@ public class RuleCreatorTest {
     // insert template rule
     RuleDto templateRule = createTemplateRule();
 
-    assertThatThrownBy(() -> {
-      NewCustomRule newRule = NewCustomRule.createForCustomRule("CUSTOM_RULE", templateRule.getKey())
-        .setName("My custom")
-        .setHtmlDescription("Some description")
-        .setStatus(RuleStatus.READY)
-        .setParameters(ImmutableMap.of("regex", "a.*"));
-      underTest.create(dbSession, newRule);
-    })
+    NewCustomRule newRule = NewCustomRule.createForCustomRule("CUSTOM_RULE", templateRule.getKey())
+      .setName("My custom")
+      .setMarkdownDescription("some description")
+      .setStatus(RuleStatus.READY)
+      .setParameters(ImmutableMap.of("regex", "a.*"));
+
+    assertThatThrownBy(() -> underTest.create(dbSession, newRule))
       .isInstanceOf(BadRequestException.class)
       .hasMessage("The severity is missing");
   }
@@ -454,15 +483,14 @@ public class RuleCreatorTest {
     // insert template rule
     RuleDto templateRule = createTemplateRule();
 
-    assertThatThrownBy(() -> {
-      NewCustomRule newRule = NewCustomRule.createForCustomRule("CUSTOM_RULE", templateRule.getKey())
-        .setName("My custom")
-        .setHtmlDescription("Some description")
-        .setSeverity("INVALID")
-        .setStatus(RuleStatus.READY)
-        .setParameters(ImmutableMap.of("regex", "a.*"));
-      underTest.create(dbSession, newRule);
-    })
+    NewCustomRule newRule = NewCustomRule.createForCustomRule("CUSTOM_RULE", templateRule.getKey())
+      .setName("My custom")
+      .setMarkdownDescription("some description")
+      .setSeverity("INVALID")
+      .setStatus(RuleStatus.READY)
+      .setParameters(ImmutableMap.of("regex", "a.*"));
+
+    assertThatThrownBy(() -> underTest.create(dbSession, newRule))
       .isInstanceOf(BadRequestException.class)
       .hasMessage("Severity \"INVALID\" is invalid");
   }
@@ -472,14 +500,13 @@ public class RuleCreatorTest {
     // insert template rule
     RuleDto templateRule = createTemplateRule();
 
-    assertThatThrownBy(() -> {
-      NewCustomRule newRule = NewCustomRule.createForCustomRule("CUSTOM_RULE", templateRule.getKey())
-        .setName("My custom")
-        .setHtmlDescription("Some description")
-        .setSeverity(Severity.MAJOR)
-        .setParameters(ImmutableMap.of("regex", "a.*"));
-      underTest.create(dbSession, newRule);
-    })
+    NewCustomRule newRule = NewCustomRule.createForCustomRule("CUSTOM_RULE", templateRule.getKey())
+      .setName("My custom")
+      .setMarkdownDescription("some description")
+      .setSeverity(Severity.MAJOR)
+      .setParameters(ImmutableMap.of("regex", "a.*"));
+
+    assertThatThrownBy(() -> underTest.create(dbSession, newRule))
       .isInstanceOf(BadRequestException.class)
       .hasMessage("The status is missing");
   }
@@ -487,22 +514,36 @@ public class RuleCreatorTest {
   @Test
   public void fail_to_create_custom_rule_when_wrong_rule_template() {
     // insert rule
-    RuleDefinitionDto rule = newRule(RuleKey.of("java", "S001")).setIsTemplate(false);
+    RuleDto rule = newRule(RuleKey.of("java", "S001")).setIsTemplate(false);
     dbTester.rules().insert(rule);
     dbSession.commit();
 
+    // Create custom rule with unknown template rule
+    NewCustomRule newRule = NewCustomRule.createForCustomRule("CUSTOM_RULE", rule.getKey())
+      .setName("My custom")
+      .setMarkdownDescription("some description")
+      .setSeverity(Severity.MAJOR)
+      .setStatus(RuleStatus.READY)
+      .setParameters(ImmutableMap.of("regex", "a.*"));
+
+    assertThatThrownBy(() -> underTest.create(dbSession, newRule))
+      .isInstanceOf(IllegalArgumentException.class)
+      .hasMessage("This rule is not a template rule: java:S001");
+  }
+
+  @Test
+  public void fail_to_create_custom_rule_when_null_template() {
     assertThatThrownBy(() -> {
-      // Create custom rule with unknown template rule
-      NewCustomRule newRule = NewCustomRule.createForCustomRule("CUSTOM_RULE", rule.getKey())
+      // Create custom rule
+      NewCustomRule newRule = NewCustomRule.createForCustomRule("CUSTOM_RULE", null)
         .setName("My custom")
-        .setHtmlDescription("Some description")
+        .setMarkdownDescription("Some description")
         .setSeverity(Severity.MAJOR)
-        .setStatus(RuleStatus.READY)
-        .setParameters(ImmutableMap.of("regex", "a.*"));
+        .setStatus(RuleStatus.READY);
       underTest.create(dbSession, newRule);
     })
       .isInstanceOf(IllegalArgumentException.class)
-      .hasMessage("This rule is not a template rule: java:S001");
+      .hasMessage("Template key should be set");
   }
 
   @Test
@@ -535,15 +576,14 @@ public class RuleCreatorTest {
       .setSecurityStandards(Sets.newHashSet("owaspTop10:a1", "cwe:123"))
       .setCreatedAt(new Date().getTime())
       .setUpdatedAt(new Date().getTime());
-    dbTester.rules().insert(templateRule.getDefinition());
-    dbTester.rules().insertOrUpdateMetadata(templateRule.getMetadata().setRuleUuid(templateRule.getUuid()));
-    dbTester.rules().insertRuleParam(templateRule.getDefinition(), param -> param.setName("regex").setType("STRING").setDescription("Reg ex").setDefaultValue(".*"));
-    ruleIndexer.commitAndIndex(dbTester.getSession(), templateRule.getDefinition().getUuid());
+    dbTester.rules().insert(templateRule);
+    dbTester.rules().insertRuleParam(templateRule, param -> param.setName("regex").setType("STRING").setDescription("Reg ex").setDefaultValue(".*"));
+    ruleIndexer.commitAndIndex(dbTester.getSession(), templateRule.getUuid());
     return templateRule;
   }
 
-  private RuleDefinitionDto createTemplateRuleWithIntArrayParam() {
-    RuleDefinitionDto templateRule = newRule(RuleKey.of("java", "S002"))
+  private RuleDto createTemplateRuleWithIntArrayParam() {
+    RuleDto templateRule = newRule(RuleKey.of("java", "S002"))
       .setIsTemplate(true)
       .setLanguage("java")
       .setConfigKey("S002")
@@ -560,8 +600,8 @@ public class RuleCreatorTest {
     return templateRule;
   }
 
-  private RuleDefinitionDto createTemplateRuleWithTwoIntParams() {
-    RuleDefinitionDto templateRule = newRule(RuleKey.of("java", "S003"))
+  private RuleDto createTemplateRuleWithTwoIntParams() {
+    RuleDto templateRule = newRule(RuleKey.of("java", "S003"))
       .setIsTemplate(true)
       .setLanguage("java")
       .setConfigKey("S003")

@@ -37,10 +37,8 @@ import org.sonar.api.rules.RulePriority;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.rule.RuleDao;
-import org.sonar.db.rule.RuleDefinitionDto;
 import org.sonar.db.rule.RuleDto;
 import org.sonar.db.rule.RuleParamDto;
-import org.sonar.markdown.Markdown;
 
 /**
  * Will be removed in the future.
@@ -49,34 +47,34 @@ public class DefaultRuleFinder implements ServerRuleFinder {
 
   private final DbClient dbClient;
   private final RuleDao ruleDao;
+  private final RuleDescriptionFormatter ruleDescriptionFormatter;
 
-  public DefaultRuleFinder(DbClient dbClient) {
+  public DefaultRuleFinder(DbClient dbClient, RuleDescriptionFormatter ruleDescriptionFormatter) {
     this.dbClient = dbClient;
     this.ruleDao = dbClient.ruleDao();
+    this.ruleDescriptionFormatter = ruleDescriptionFormatter;
   }
 
   @Override
-  public Optional<RuleDefinitionDto> findDtoByKey(RuleKey key) {
+  public Optional<RuleDto> findDtoByKey(RuleKey key) {
     try (DbSession dbSession = dbClient.openSession(false)) {
-      return ruleDao.selectDefinitionByKey(dbSession, key)
+      return ruleDao.selectByKey(dbSession, key)
         .filter(r -> r.getStatus() != RuleStatus.REMOVED);
     }
   }
 
   @Override
-  public Optional<RuleDefinitionDto> findDtoByUuid(String uuid) {
+  public Optional<RuleDto> findDtoByUuid(String uuid) {
     try (DbSession dbSession = dbClient.openSession(false)) {
-      return ruleDao.selectDefinitionByUuid(uuid, dbSession)
+      return ruleDao.selectByUuid(uuid, dbSession)
         .filter(r -> r.getStatus() != RuleStatus.REMOVED);
     }
   }
 
   @Override
-  public Collection<RuleDefinitionDto> findAll() {
+  public Collection<RuleDto> findAll() {
     try (DbSession dbSession = dbClient.openSession(false)) {
-      List<RuleDefinitionDto> list = new ArrayList<>();
-      ruleDao.selectEnabled(dbSession, r -> list.add(r.getResultObject()));
-      return list;
+      return ruleDao.selectEnabled(dbSession);
     }
   }
 
@@ -133,10 +131,8 @@ public class DefaultRuleFinder implements ServerRuleFinder {
     return rules;
   }
 
-  private static org.sonar.api.rules.Rule toRule(RuleDto rule, List<RuleParamDto> params) {
+  private org.sonar.api.rules.Rule toRule(RuleDto rule, List<RuleParamDto> params) {
     String severity = rule.getSeverityString();
-    String description = rule.getDescription();
-    RuleDto.Format descriptionFormat = rule.getDescriptionFormat();
 
     org.sonar.api.rules.Rule apiRule = new org.sonar.api.rules.Rule();
     apiRule
@@ -152,13 +148,8 @@ public class DefaultRuleFinder implements ServerRuleFinder {
       .setStatus(rule.getStatus().name())
       .setSystemTags(rule.getSystemTags().toArray(new String[rule.getSystemTags().size()]))
       .setTags(rule.getTags().toArray(new String[rule.getTags().size()]));
-    if (description != null && descriptionFormat != null) {
-      if (RuleDto.Format.HTML.equals(descriptionFormat)) {
-        apiRule.setDescription(description);
-      } else {
-        apiRule.setDescription(Markdown.convertToHtml(description));
-      }
-    }
+
+    Optional.ofNullable(ruleDescriptionFormatter.getDescriptionAsHtml(rule)).ifPresent(apiRule::setDescription);
 
     List<org.sonar.api.rules.RuleParam> apiParams = new ArrayList<>();
     for (RuleParamDto param : params) {

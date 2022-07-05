@@ -15,7 +15,7 @@ For example, if you override the `sonar.exclusions` parameter via command line f
 
 Most of the property keys shown in the interface at both global and project levels can also be set as analysis parameters, but the parameters listed below can _only_ be set at analysis time. 
 
-For language-specific parameters related to test coverage and execution, see [Test Coverage & Execution](/analysis/coverage/).  
+For language-specific parameters related to test coverage and execution, see [Test Coverage](/analysis/test-coverage/overview/).
 For language-specific parameters related to external issue reports, see [External Issues](/analysis/external-issues/).
 
 [[info]]
@@ -46,10 +46,10 @@ By default, user authentication is required to prevent anonymous users from brow
 
 When authentication is required or the "Anyone" pseudo-group does not have permission to perform analyses, you'll need to supply the credentials of a user with Execute Analysis permissions for the analysis to run under.
 
-Key | Description | Default
----|----|---
-`sonar.login` | The [authentication token](/user-guide/user-token/) or login of a SonarQube user with Execute Analysis permission on the project. |
-`sonar.password` | If you're using an authentication token, leave this blank. If you're using a login, this is the password that goes with your `sonar.login` username. |
+Key | Description                                                                                                                                                                                   | Default
+---|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---
+`sonar.login` | The [authentication token](/user-guide/user-token/) or login of a SonarQube user with either Execute Analysis permission on the project or Global Execute Analysis permission. |
+`sonar.password` | If you're using an authentication token, leave this blank. If you're using a login, this is the password that goes with your `sonar.login` username.                                          |
 
 ### Web Services
 Key | Description | Default

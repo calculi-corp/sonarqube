@@ -24,7 +24,9 @@ import { Button, ResetButtonLink } from '../../../components/controls/buttons';
 import { translate, translateWithParameters } from '../../../helpers/l10n';
 import { sanitizeString } from '../../../helpers/sanitize';
 import { RuleDetails } from '../../../types/types';
+import { RuleDescriptionSections } from '../rule';
 import RemoveExtendedDescriptionModal from './RemoveExtendedDescriptionModal';
+import RuleTabViewer from './RuleTabViewer';
 
 interface Props {
   canWrite: boolean | undefined;
@@ -107,7 +109,7 @@ export default class RuleDetailsDescription extends React.PureComponent<Props, S
     });
   };
 
-  renderDescription = () => (
+  renderExtendedDescription = () => (
     <div id="coding-rules-detail-description-extra">
       {this.props.ruleDetails.htmlNote !== undefined && (
         <div
@@ -189,15 +191,32 @@ export default class RuleDetailsDescription extends React.PureComponent<Props, S
     const { ruleDetails } = this.props;
     const hasDescription = !ruleDetails.isExternal || ruleDetails.type !== 'UNKNOWN';
 
+    const hasDescriptionSection =
+      hasDescription &&
+      ruleDetails.descriptionSections &&
+      ruleDetails.descriptionSections.length > 0;
+
+    const defaultSection =
+      hasDescriptionSection &&
+      ruleDetails.descriptionSections?.length === 1 &&
+      ruleDetails.descriptionSections[0].key === RuleDescriptionSections.DEFAULT
+        ? ruleDetails.descriptionSections[0]
+        : undefined;
+
     return (
       <div className="js-rule-description">
-        {hasDescription && ruleDetails.htmlDesc !== undefined ? (
-          <div
-            className="coding-rules-detail-description rule-desc markdown"
-            // eslint-disable-next-line react/no-danger
-            dangerouslySetInnerHTML={{ __html: sanitizeString(ruleDetails.htmlDesc) }}
+        {defaultSection && (
+          <section
+            className="coding-rules-detail-description markdown"
+            key={defaultSection.key}
+            /* eslint-disable-next-line react/no-danger */
+            dangerouslySetInnerHTML={{ __html: sanitizeString(defaultSection.content) }}
           />
-        ) : (
+        )}
+
+        {hasDescriptionSection && !defaultSection && <RuleTabViewer ruleDetails={ruleDetails} />}
+
+        {ruleDetails.isExternal && (
           <div className="coding-rules-detail-description rule-desc markdown">
             {translateWithParameters('issue.external_issue_description', ruleDetails.name)}
           </div>
@@ -205,7 +224,7 @@ export default class RuleDetailsDescription extends React.PureComponent<Props, S
 
         {!ruleDetails.templateKey && (
           <div className="coding-rules-detail-description coding-rules-detail-description-extra">
-            {!this.state.descriptionForm && this.renderDescription()}
+            {!this.state.descriptionForm && this.renderExtendedDescription()}
             {this.state.descriptionForm && this.props.canWrite && this.renderForm()}
           </div>
         )}

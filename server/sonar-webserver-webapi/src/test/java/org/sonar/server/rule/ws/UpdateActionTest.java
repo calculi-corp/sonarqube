@@ -26,15 +26,17 @@ import org.sonar.api.rule.RuleKey;
 import org.sonar.api.rule.RuleStatus;
 import org.sonar.api.rule.Severity;
 import org.sonar.api.utils.System2;
+import org.sonar.core.util.UuidFactoryFast;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbTester;
-import org.sonar.db.rule.RuleDefinitionDto;
-import org.sonar.db.rule.RuleMetadataDto;
+import org.sonar.db.rule.RuleDescriptionSectionDto;
+import org.sonar.db.rule.RuleDto;
 import org.sonar.db.user.UserDto;
 import org.sonar.server.es.EsClient;
 import org.sonar.server.es.EsTester;
 import org.sonar.server.exceptions.ForbiddenException;
 import org.sonar.server.exceptions.UnauthorizedException;
+import org.sonar.server.rule.RuleDescriptionFormatter;
 import org.sonar.server.rule.RuleUpdater;
 import org.sonar.server.rule.index.RuleIndexer;
 import org.sonar.server.tester.UserSessionRule;
@@ -53,6 +55,8 @@ import static org.mockito.Mockito.mock;
 import static org.sonar.api.server.debt.DebtRemediationFunction.Type.LINEAR;
 import static org.sonar.api.server.debt.DebtRemediationFunction.Type.LINEAR_OFFSET;
 import static org.sonar.db.permission.GlobalPermission.ADMINISTER_QUALITY_PROFILES;
+import static org.sonar.db.rule.RuleDescriptionSectionDto.createDefaultRuleDescriptionSection;
+import static org.sonar.db.rule.RuleTesting.newRule;
 import static org.sonar.db.rule.RuleTesting.setSystemTags;
 import static org.sonar.db.rule.RuleTesting.setTags;
 import static org.sonar.server.rule.ws.UpdateAction.PARAM_KEY;
@@ -67,7 +71,6 @@ public class UpdateActionTest {
 
   private static final long PAST = 10000L;
 
-
   @Rule
   public DbTester db = DbTester.create();
 
@@ -77,15 +80,18 @@ public class UpdateActionTest {
   @Rule
   public UserSessionRule userSession = UserSessionRule.standalone();
 
-  private DbClient dbClient = db.getDbClient();
-  private EsClient esClient = es.client();
+  private final DbClient dbClient = db.getDbClient();
+  private final EsClient esClient = es.client();
+  private final RuleDescriptionFormatter ruleDescriptionFormatter = new RuleDescriptionFormatter();
 
-  private Languages languages = new Languages();
-  private RuleMapper mapper = new RuleMapper(languages, createMacroInterpreter());
-  private RuleIndexer ruleIndexer = new RuleIndexer(esClient, dbClient);
-  private RuleUpdater ruleUpdater = new RuleUpdater(dbClient, ruleIndexer, System2.INSTANCE);
-  private WsAction underTest = new UpdateAction(dbClient, ruleUpdater, mapper, userSession, new RuleWsSupport(db.getDbClient(), userSession));
-  private WsActionTester ws = new WsActionTester(underTest);
+  private final Languages languages = new Languages();
+  private final RuleMapper mapper = new RuleMapper(languages, createMacroInterpreter(), ruleDescriptionFormatter);
+  private final RuleIndexer ruleIndexer = new RuleIndexer(esClient, dbClient);
+  private final UuidFactoryFast uuidFactory = UuidFactoryFast.getInstance();
+
+  private final RuleUpdater ruleUpdater = new RuleUpdater(dbClient, ruleIndexer, uuidFactory, System2.INSTANCE);
+  private final WsAction underTest = new UpdateAction(dbClient, ruleUpdater, mapper, userSession, new RuleWsSupport(db.getDbClient(), userSession));
+  private final WsActionTester ws = new WsActionTester(underTest);
 
   @Test
   public void check_definition() {
@@ -98,22 +104,24 @@ public class UpdateActionTest {
   @Test
   public void update_custom_rule() {
     logInAsQProfileAdministrator();
-    RuleDefinitionDto templateRule = db.rules().insert(
+    RuleDto templateRule = db.rules().insert(
       r -> r.setRuleKey(RuleKey.of("java", "S001")),
       r -> r.setIsTemplate(true),
+      r -> r.setNoteUserUuid(null),
       r -> r.setCreatedAt(PAST),
       r -> r.setUpdatedAt(PAST));
     db.rules().insertRuleParam(templateRule, param -> param.setName("regex").setType("STRING").setDescription("Reg ex").setDefaultValue(".*"));
-    RuleDefinitionDto customRule = db.rules().insert(
-      r -> r.setRuleKey(RuleKey.of("java", "MY_CUSTOM")),
-      r -> r.setName("Old custom"),
-      r -> r.setDescription("Old description"),
-      r -> r.setSeverity(Severity.MINOR),
-      r -> r.setStatus(RuleStatus.BETA),
-      r -> r.setTemplateUuid(templateRule.getUuid()),
-      r -> r.setLanguage("js"),
-      r -> r.setCreatedAt(PAST),
-      r -> r.setUpdatedAt(PAST));
+
+    RuleDto customRule = newRule(RuleKey.of("java", "MY_CUSTOM"), createRuleDescriptionSectionDto())
+      .setName("Old custom")
+      .setSeverity(Severity.MINOR)
+      .setStatus(RuleStatus.BETA)
+      .setTemplateUuid(templateRule.getUuid())
+      .setLanguage("js")
+      .setNoteUserUuid(null)
+      .setCreatedAt(PAST)
+      .setUpdatedAt(PAST);
+    customRule = db.rules().insert(customRule);
     db.rules().insertRuleParam(customRule, param -> param.setName("regex").setType("a").setDescription("Reg ex"));
 
     TestResponse request = ws.newRequest().setMethod("POST")
@@ -150,8 +158,7 @@ public class UpdateActionTest {
   public void update_tags() {
     logInAsQProfileAdministrator();
 
-    RuleDefinitionDto rule = db.rules().insert(setSystemTags("stag1", "stag2"));
-    db.rules().insertOrUpdateMetadata(rule, setTags("tag1", "tag2"), m -> m.setNoteData(null).setNoteUserUuid(null));
+    RuleDto rule = db.rules().insert(setSystemTags("stag1", "stag2"), setTags("tag1", "tag2"), r -> r.setNoteData(null).setNoteUserUuid(null));
 
     Rules.UpdateResponse result = ws.newRequest().setMethod("POST")
       .setParam(PARAM_KEY, rule.getKey().toString())
@@ -170,10 +177,11 @@ public class UpdateActionTest {
   public void update_rule_remediation_function() {
     logInAsQProfileAdministrator();
 
-    RuleDefinitionDto rule = db.rules().insert(
+    RuleDto rule = db.rules().insert(
       r -> r.setDefRemediationFunction(LINEAR.toString()),
       r -> r.setDefRemediationGapMultiplier("10d"),
-      r -> r.setDefRemediationBaseEffort(null));
+      r -> r.setDefRemediationBaseEffort(null),
+      r -> r.setNoteUserUuid(null));
 
     String newOffset = LINEAR_OFFSET.toString();
     String newMultiplier = "15d";
@@ -200,18 +208,17 @@ public class UpdateActionTest {
     assertThat(updatedRule.getRemFnBaseEffort()).isEqualTo(newEffort);
 
     // check database
-    RuleMetadataDto metadataOfSpecificOrg = db.getDbClient().ruleDao().selectMetadataByKey(db.getSession(), rule.getKey())
+    RuleDto updatedRuleDto = db.getDbClient().ruleDao().selectByKey(db.getSession(), rule.getKey())
       .orElseThrow(() -> new IllegalStateException("Cannot load metadata"));
-    assertThat(metadataOfSpecificOrg.getRemediationFunction()).isEqualTo(newOffset);
-    assertThat(metadataOfSpecificOrg.getRemediationGapMultiplier()).isEqualTo(newMultiplier);
-    assertThat(metadataOfSpecificOrg.getRemediationBaseEffort()).isEqualTo(newEffort);
+    assertThat(updatedRuleDto.getRemediationFunction()).isEqualTo(newOffset);
+    assertThat(updatedRuleDto.getRemediationGapMultiplier()).isEqualTo(newMultiplier);
+    assertThat(updatedRuleDto.getRemediationBaseEffort()).isEqualTo(newEffort);
   }
 
   @Test
   public void update_note() {
-    RuleDefinitionDto rule = db.rules().insert();
     UserDto userHavingUpdatingNote = db.users().insertUser();
-    db.rules().insertOrUpdateMetadata(rule, userHavingUpdatingNote, m -> m.setNoteData("old data"));
+    RuleDto rule = db.rules().insert(m -> m.setNoteData("old data").setNoteUserUuid(userHavingUpdatingNote.getUuid()));
     UserDto userAuthenticated = db.users().insertUser();
     userSession.logIn(userAuthenticated).addPermission(ADMINISTER_QUALITY_PROFILES);
 
@@ -227,26 +234,27 @@ public class UpdateActionTest {
     assertThat(updatedRule.getNoteLogin()).isEqualTo(userAuthenticated.getLogin());
 
     // check database
-    RuleMetadataDto metadataOfSpecificOrg = db.getDbClient().ruleDao().selectMetadataByKey(db.getSession(), rule.getKey()).get();
-    assertThat(metadataOfSpecificOrg.getNoteData()).isEqualTo("new data");
-    assertThat(metadataOfSpecificOrg.getNoteUserUuid()).isEqualTo(userAuthenticated.getUuid());
+    RuleDto updatedRuleDto = db.getDbClient().ruleDao().selectByKey(db.getSession(), rule.getKey()).get();
+    assertThat(updatedRuleDto.getNoteData()).isEqualTo("new data");
+    assertThat(updatedRuleDto.getNoteUserUuid()).isEqualTo(userAuthenticated.getUuid());
   }
 
   @Test
   public void fail_to_update_custom_when_description_is_empty() {
     logInAsQProfileAdministrator();
-    RuleDefinitionDto templateRule = db.rules().insert(
+    RuleDto templateRule = db.rules().insert(
       r -> r.setRuleKey(RuleKey.of("java", "S001")),
       r -> r.setIsTemplate(true),
       r -> r.setCreatedAt(PAST),
       r -> r.setUpdatedAt(PAST));
-    RuleDefinitionDto customRule = db.rules().insert(
-      r -> r.setRuleKey(RuleKey.of("java", "MY_CUSTOM")),
-      r -> r.setName("Old custom"),
-      r -> r.setDescription("Old description"),
-      r -> r.setTemplateUuid(templateRule.getUuid()),
-      r -> r.setCreatedAt(PAST),
-      r -> r.setUpdatedAt(PAST));
+
+    RuleDto customRule = db.rules().insert(
+      newRule(RuleKey.of("java", "MY_CUSTOM"), createRuleDescriptionSectionDto())
+        .setRuleKey(RuleKey.of("java", "MY_CUSTOM"))
+        .setName("Old custom")
+        .setTemplateUuid(templateRule.getUuid())
+        .setCreatedAt(PAST)
+        .setUpdatedAt(PAST));
 
     assertThatThrownBy(() -> {
       ws.newRequest().setMethod("POST")
@@ -262,7 +270,7 @@ public class UpdateActionTest {
   @Test
   public void throw_IllegalArgumentException_if_trying_to_update_builtin_rule_description() {
     logInAsQProfileAdministrator();
-    RuleDefinitionDto rule = db.rules().insert();
+    RuleDto rule = db.rules().insert();
 
     assertThatThrownBy(() -> {
       ws.newRequest().setMethod("POST")
@@ -297,6 +305,10 @@ public class UpdateActionTest {
     userSession
       .logIn()
       .addPermission(ADMINISTER_QUALITY_PROFILES);
+  }
+
+  private RuleDescriptionSectionDto createRuleDescriptionSectionDto() {
+    return createDefaultRuleDescriptionSection(uuidFactory.create(), "Old description");
   }
 
   private static MacroInterpreter createMacroInterpreter() {

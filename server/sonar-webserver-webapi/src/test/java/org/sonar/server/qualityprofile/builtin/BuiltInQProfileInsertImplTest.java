@@ -40,11 +40,12 @@ import org.sonar.db.qualityprofile.ActiveRuleParamDto;
 import org.sonar.db.qualityprofile.QProfileChangeDto;
 import org.sonar.db.qualityprofile.QProfileChangeQuery;
 import org.sonar.db.qualityprofile.QProfileDto;
-import org.sonar.db.rule.RuleDefinitionDto;
+import org.sonar.db.rule.RuleDto;
 import org.sonar.db.rule.RuleParamDto;
 import org.sonar.server.qualityprofile.ActiveRuleChange;
 import org.sonar.server.qualityprofile.index.ActiveRuleIndexer;
 import org.sonar.server.rule.DefaultRuleFinder;
+import org.sonar.server.rule.RuleDescriptionFormatter;
 import org.sonar.server.rule.ServerRuleFinder;
 import org.sonar.server.util.StringTypeValidation;
 import org.sonar.server.util.TypeValidations;
@@ -65,7 +66,7 @@ public class BuiltInQProfileInsertImplTest {
   private final TypeValidations typeValidations = new TypeValidations(singletonList(new StringTypeValidation()));
   private final DbSession dbSession = db.getSession();
   private final DbSession batchDbSession = db.getDbClient().openSession(true);
-  private final ServerRuleFinder ruleFinder = new DefaultRuleFinder(db.getDbClient());
+  private final ServerRuleFinder ruleFinder = new DefaultRuleFinder(db.getDbClient(), mock(RuleDescriptionFormatter.class));
   private final ActiveRuleIndexer activeRuleIndexer = mock(ActiveRuleIndexer.class);
   private final BuiltInQProfileInsertImpl underTest = new BuiltInQProfileInsertImpl(db.getDbClient(), ruleFinder, system2, uuidFactory, typeValidations, activeRuleIndexer);
 
@@ -76,8 +77,8 @@ public class BuiltInQProfileInsertImplTest {
 
   @Test
   public void insert_active_rules_and_changelog() {
-    RuleDefinitionDto rule1 = db.rules().insert(r -> r.setLanguage("xoo"));
-    RuleDefinitionDto rule2 = db.rules().insert(r -> r.setLanguage("xoo"));
+    RuleDto rule1 = db.rules().insert(r -> r.setLanguage("xoo"));
+    RuleDto rule2 = db.rules().insert(r -> r.setLanguage("xoo"));
 
     BuiltInQualityProfilesDefinition.Context context = new BuiltInQualityProfilesDefinition.Context();
     NewBuiltInQualityProfile newQp = context.createBuiltInQualityProfile("the name", "xoo");
@@ -123,7 +124,7 @@ public class BuiltInQProfileInsertImplTest {
 
   @Test
   public void insert_active_rules_with_params() {
-    RuleDefinitionDto rule1 = db.rules().insert(r -> r.setLanguage("xoo"));
+    RuleDto rule1 = db.rules().insert(r -> r.setLanguage("xoo"));
     RuleParamDto param1 = db.rules().insertRuleParam(rule1, p -> p.setType(PropertyType.STRING.name()));
     RuleParamDto param2 = db.rules().insertRuleParam(rule1, p -> p.setType(PropertyType.STRING.name()));
 
@@ -193,7 +194,7 @@ public class BuiltInQProfileInsertImplTest {
 
   // TODO test lot of active_rules, params, orgas
 
-  private void verifyActiveRuleInDb(QProfileDto profile, RuleDefinitionDto rule, String expectedSeverity, RuleParamDto... paramDtos) {
+  private void verifyActiveRuleInDb(QProfileDto profile, RuleDto rule, String expectedSeverity, RuleParamDto... paramDtos) {
     ActiveRuleDto activeRule = db.getDbClient().activeRuleDao().selectByKey(dbSession, ActiveRuleKey.of(profile, rule.getKey())).get();
     assertThat(activeRule.getUuid()).isNotNull();
     assertThat(activeRule.getInheritance()).isNull();

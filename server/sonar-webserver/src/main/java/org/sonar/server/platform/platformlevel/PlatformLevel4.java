@@ -184,6 +184,9 @@ import org.sonar.server.projectlink.ws.ProjectLinksModule;
 import org.sonar.server.projecttag.ws.ProjectTagsWsModule;
 import org.sonar.server.property.InternalPropertiesImpl;
 import org.sonar.server.pushapi.ServerPushWsModule;
+import org.sonar.server.pushapi.issues.DistributedIssueChangeEventsDistributor;
+import org.sonar.server.pushapi.issues.IssueChangeEventServiceImpl;
+import org.sonar.server.pushapi.issues.StandaloneIssueChangeEventsDistributor;
 import org.sonar.server.pushapi.qualityprofile.DistributedRuleActivatorEventsDistributor;
 import org.sonar.server.pushapi.qualityprofile.QualityProfileChangeEventServiceImpl;
 import org.sonar.server.pushapi.qualityprofile.StandaloneRuleActivatorEventsDistributor;
@@ -206,10 +209,10 @@ import org.sonar.server.qualityprofile.builtin.BuiltInQProfileRepositoryImpl;
 import org.sonar.server.qualityprofile.builtin.RuleActivator;
 import org.sonar.server.qualityprofile.index.ActiveRuleIndexer;
 import org.sonar.server.qualityprofile.ws.QProfilesWsModule;
-import org.sonar.server.root.ws.RootWsModule;
 import org.sonar.server.rule.CommonRuleDefinitionsImpl;
 import org.sonar.server.rule.RuleCreator;
 import org.sonar.server.rule.RuleDefinitionsLoader;
+import org.sonar.server.rule.RuleDescriptionFormatter;
 import org.sonar.server.rule.RuleUpdater;
 import org.sonar.server.rule.WebServerRuleFinderImpl;
 import org.sonar.server.rule.index.RuleIndexDefinition;
@@ -284,7 +287,11 @@ public class PlatformLevel4 extends PlatformLevel {
     addIfCluster(DistributedRuleActivatorEventsDistributor.class);
     addIfStandalone(StandaloneRuleActivatorEventsDistributor.class);
 
+    addIfCluster(DistributedIssueChangeEventsDistributor.class);
+    addIfStandalone(StandaloneIssueChangeEventsDistributor.class);
+
     add(
+      RuleDescriptionFormatter.class,
       ClusterVerification.class,
       LogServerId.class,
       LogOAuthWarning.class,
@@ -454,6 +461,7 @@ public class PlatformLevel4 extends PlatformLevel {
       NewIssuesNotificationHandler.newMetadata(),
       MyNewIssuesNotificationHandler.class,
       MyNewIssuesNotificationHandler.newMetadata(),
+      IssueChangeEventServiceImpl.class,
 
       // issues actions
       AssignAction.class,
@@ -585,9 +593,6 @@ public class PlatformLevel4 extends PlatformLevel {
 
       // UI
       new NavigationWsModule(),
-
-      // root
-      new RootWsModule(),
 
       // webhooks
       WebhookQGChangeEventListener.class,

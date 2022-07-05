@@ -20,8 +20,11 @@
 import { shallow } from 'enzyme';
 import * as React from 'react';
 import { generateToken, getTokens } from '../../../../api/user-tokens';
+import { mockUserToken } from '../../../../helpers/mocks/token';
+import { mockCurrentUser } from '../../../../helpers/testMocks';
 import { change, submit, waitAndUpdate } from '../../../../helpers/testUtils';
-import TokensForm from '../TokensForm';
+import { TokenType } from '../../../../types/token';
+import { TokensForm } from '../TokensForm';
 
 jest.mock('../../../../api/user-tokens', () => ({
   generateToken: jest.fn().mockResolvedValue({
@@ -63,7 +66,7 @@ it('should create new tokens', async () => {
   submit(wrapper.find('form'));
 
   await waitAndUpdate(wrapper);
-  expect(generateToken).toHaveBeenCalledWith({ name: 'baz', login: 'luke' });
+  expect(generateToken).toHaveBeenCalledWith({ name: 'baz', login: 'luke', type: TokenType.User });
   expect(wrapper.find('TokensFormItem')).toHaveLength(3);
 });
 
@@ -73,13 +76,22 @@ it('should revoke tokens', async () => {
 
   await waitAndUpdate(wrapper);
   expect(wrapper.find('TokensFormItem')).toHaveLength(2);
-  wrapper.instance().handleRevokeToken({ createdAt: '2019-01-15T15:06:33+0100', name: 'foo' });
+  wrapper
+    .instance()
+    .handleRevokeToken(mockUserToken({ createdAt: '2019-01-15T15:06:33+0100', name: 'foo' }));
   expect(updateTokensCount).toHaveBeenCalledWith('luke', 1);
   expect(wrapper.find('TokensFormItem')).toHaveLength(1);
 });
 
 function shallowRender(props: Partial<TokensForm['props']> = {}) {
   return shallow<TokensForm>(
-    <TokensForm deleteConfirmation="inline" login="luke" updateTokensCount={jest.fn()} {...props} />
+    <TokensForm
+      deleteConfirmation="inline"
+      login="luke"
+      updateTokensCount={jest.fn()}
+      displayTokenTypeInput={false}
+      currentUser={mockCurrentUser()}
+      {...props}
+    />
   );
 }

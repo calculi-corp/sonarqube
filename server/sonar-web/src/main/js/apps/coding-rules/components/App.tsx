@@ -20,18 +20,20 @@
 import { keyBy } from 'lodash';
 import * as React from 'react';
 import { Helmet } from 'react-helmet-async';
-import { withRouter, WithRouterProps } from 'react-router';
 import { Profile, searchQualityProfiles } from '../../../api/quality-profiles';
 import { getRulesApp, searchRules } from '../../../api/rules';
-import A11ySkipTarget from '../../../app/components/a11y/A11ySkipTarget';
 import withCurrentUserContext from '../../../app/components/current-user/withCurrentUserContext';
-import Suggestions from '../../../app/components/embed-docs-modal/Suggestions';
+import A11ySkipTarget from '../../../components/a11y/A11ySkipTarget';
 import FiltersHeader from '../../../components/common/FiltersHeader';
 import ScreenPositionHelper from '../../../components/common/ScreenPositionHelper';
 import ListFooter from '../../../components/controls/ListFooter';
 import SearchBox from '../../../components/controls/SearchBox';
+import Suggestions from '../../../components/embed-docs-modal/Suggestions';
+import { Location, Router, withRouter } from '../../../components/hoc/withRouter';
 import BackIcon from '../../../components/icons/BackIcon';
 import '../../../components/search-navigator.css';
+import { isInput, isShortcut } from '../../../helpers/keyboardEventHelpers';
+import { KeyboardKeys } from '../../../helpers/keycodes';
 import { translate } from '../../../helpers/l10n';
 import {
   addSideBarClass,
@@ -77,8 +79,10 @@ const PAGE_SIZE = 100;
 const MAX_SEARCH_LENGTH = 200;
 const LIMIT_BEFORE_LOAD_MORE = 5;
 
-interface Props extends WithRouterProps {
+interface Props {
   currentUser: CurrentUser;
+  location: Location;
+  router: Router;
 }
 
 interface State {
@@ -151,22 +155,26 @@ export class App extends React.PureComponent<Props, State> {
   };
 
   handleKeyPress = (event: KeyboardEvent) => {
-    switch (event.code) {
-      case 'ArrowLeft':
+    if (isInput(event) || isShortcut(event)) {
+      return true;
+    }
+    switch (event.key) {
+      case KeyboardKeys.LeftArrow:
         event.preventDefault();
         this.handleBack();
-        return;
-      case 'ArrowRight':
+        break;
+      case KeyboardKeys.RightArrow:
         event.preventDefault();
         this.openSelectedRule();
-        return;
-      case 'ArrowDown':
+        break;
+      case KeyboardKeys.DownArrow:
         event.preventDefault();
         this.selectNextRule();
-        return;
-      case 'ArrowUp':
+        break;
+      case KeyboardKeys.UpArrow:
         event.preventDefault();
         this.selectPreviousRule();
+        break;
     }
   };
 

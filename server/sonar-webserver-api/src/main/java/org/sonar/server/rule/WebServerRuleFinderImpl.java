@@ -27,23 +27,25 @@ import org.sonar.api.rule.RuleKey;
 import org.sonar.api.rules.Rule;
 import org.sonar.api.rules.RuleQuery;
 import org.sonar.db.DbClient;
-import org.sonar.db.rule.RuleDefinitionDto;
+import org.sonar.db.rule.RuleDto;
 
 public class WebServerRuleFinderImpl implements WebServerRuleFinder {
   private final DbClient dbClient;
   private final ServerRuleFinder defaultFinder;
+  private final RuleDescriptionFormatter ruleDescriptionFormatter;
   @VisibleForTesting
   ServerRuleFinder delegate;
 
-  public WebServerRuleFinderImpl(DbClient dbClient) {
+  public WebServerRuleFinderImpl(DbClient dbClient, RuleDescriptionFormatter ruleDescriptionFormatter) {
     this.dbClient = dbClient;
-    this.defaultFinder = new DefaultRuleFinder(dbClient);
+    this.ruleDescriptionFormatter = ruleDescriptionFormatter;
+    this.defaultFinder = new DefaultRuleFinder(dbClient, ruleDescriptionFormatter);
     this.delegate = this.defaultFinder;
   }
 
   @Override
   public void startCaching() {
-    this.delegate = new CachingRuleFinder(dbClient);
+    this.delegate = new CachingRuleFinder(dbClient, ruleDescriptionFormatter);
   }
 
   @Override
@@ -75,17 +77,17 @@ public class WebServerRuleFinderImpl implements WebServerRuleFinder {
   }
 
   @Override
-  public Optional<RuleDefinitionDto> findDtoByKey(RuleKey key) {
+  public Optional<RuleDto> findDtoByKey(RuleKey key) {
     return delegate.findDtoByKey(key);
   }
 
   @Override
-  public Optional<RuleDefinitionDto> findDtoByUuid(String uuid) {
+  public Optional<RuleDto> findDtoByUuid(String uuid) {
     return delegate.findDtoByUuid(uuid);
   }
 
   @Override
-  public Collection<RuleDefinitionDto> findAll() {
+  public Collection<RuleDto> findAll() {
     return delegate.findAll();
   }
 

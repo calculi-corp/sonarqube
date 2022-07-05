@@ -375,6 +375,19 @@
     </if>
   </sql>
 
+  <select id="selectChildren" resultType="Component">
+    select
+      <include refid="componentColumns"/>
+    from components p
+    where
+    p.project_uuid = #{branchUuid,jdbcType=VARCHAR}
+    and p.uuid_path in
+    <foreach collection="uuidPaths" item="uuidPath" open="(" close=")" separator=",">
+        #{uuidPath,jdbcType=VARCHAR}
+    </foreach>
+    and p.enabled = ${_true}
+  </select>
+
   <select id="selectDescendants" resultType="Component">
     select
       <include refid="componentColumns"/>

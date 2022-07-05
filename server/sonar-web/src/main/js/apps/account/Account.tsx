@@ -19,9 +19,10 @@
  */
 import * as React from 'react';
 import { Helmet } from 'react-helmet-async';
-import A11ySkipTarget from '../../app/components/a11y/A11ySkipTarget';
+import { Outlet } from 'react-router-dom';
 import withCurrentUserContext from '../../app/components/current-user/withCurrentUserContext';
-import Suggestions from '../../app/components/embed-docs-modal/Suggestions';
+import A11ySkipTarget from '../../components/a11y/A11ySkipTarget';
+import Suggestions from '../../components/embed-docs-modal/Suggestions';
 import handleRequiredAuthentication from '../../helpers/handleRequiredAuthentication';
 import { translate } from '../../helpers/l10n';
 import { CurrentUser, LoggedInUser } from '../../types/users';
@@ -41,7 +42,7 @@ export class Account extends React.PureComponent<Props> {
   }
 
   render() {
-    const { currentUser, children } = this.props;
+    const { currentUser } = this.props;
 
     if (!currentUser.isLoggedIn) {
       return null;
@@ -60,7 +61,7 @@ export class Account extends React.PureComponent<Props> {
           </div>
         </header>
 
-        {children}
+        <Outlet />
       </div>
     );
   }

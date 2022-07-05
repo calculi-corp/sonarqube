@@ -23,6 +23,15 @@
   padding-bottom: var(--gridSize);
   background-color: var(--issueBgColor);
   transition: all 0.3s ease, border 0s ease;
+  cursor: pointer;
+}
+
+.issue.no-click {
+  cursor: initial;
+}
+
+.issue.secondary-issue {
+  background-color: var(--secondIssueBgColor);
 }
 
 .issue.hotspot {

@@ -19,6 +19,10 @@
  */
 package org.sonar.db.rule;
 
+import com.google.common.annotations.VisibleForTesting;
+import com.google.common.collect.Sets;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.Set;
 import javax.annotation.CheckForNull;
 import org.sonar.api.rule.RuleKey;
@@ -31,25 +35,54 @@ public class RuleForIndexingDto {
   private String repository;
   private String pluginRuleKey;
   private String name;
-  private String description;
   private RuleDto.Format descriptionFormat;
   private Integer severity;
   private RuleStatus status;
   private boolean isTemplate;
-  private String systemTags;
-  private String tags;
-  private String securityStandards;
+  private Set<String> systemTags;
+  private Set<String> tags;
+  private Set<String> securityStandards;
   private String templateRuleKey;
   private String templateRepository;
   private String internalKey;
   private String language;
   private boolean isExternal;
+
   private int type;
+
   private long createdAt;
   private long updatedAt;
+  private Set<RuleDescriptionSectionDto> ruleDescriptionSectionsDtos = new HashSet<>();
 
+  @VisibleForTesting
   public RuleForIndexingDto() {
     // nothing to do here
+  }
+
+  public static RuleForIndexingDto fromRuleDto(RuleDto r) {
+    RuleForIndexingDto ruleForIndexingDto = new RuleForIndexingDto();
+    ruleForIndexingDto.createdAt = r.getCreatedAt();
+    ruleForIndexingDto.uuid = r.getUuid();
+    ruleForIndexingDto.repository = r.getRepositoryKey();
+    ruleForIndexingDto.pluginRuleKey = r.getRuleKey();
+    ruleForIndexingDto.name = r.getName();
+    ruleForIndexingDto.descriptionFormat = r.getDescriptionFormat();
+    ruleForIndexingDto.severity = r.getSeverity();
+    ruleForIndexingDto.status = r.getStatus();
+    ruleForIndexingDto.isTemplate = r.isTemplate();
+    ruleForIndexingDto.systemTags = Sets.newHashSet(r.getSystemTags());
+    ruleForIndexingDto.tags = r.getTags() != null ? Sets.newHashSet(r.getTags()) : Collections.emptySet();
+    ruleForIndexingDto.securityStandards = Sets.newHashSet(r.getSecurityStandards());
+    ruleForIndexingDto.internalKey = r.getConfigKey();
+    ruleForIndexingDto.language = r.getLanguage();
+    ruleForIndexingDto.isExternal = r.isExternal();
+    ruleForIndexingDto.type = r.getType();
+    ruleForIndexingDto.createdAt = r.getCreatedAt();
+    ruleForIndexingDto.updatedAt = r.getUpdatedAt();
+    if (r.getRuleDescriptionSectionDtos() != null) {
+      ruleForIndexingDto.setRuleDescriptionSectionsDtos(Sets.newHashSet(r.getRuleDescriptionSectionDtos()));
+    }
+    return ruleForIndexingDto;
   }
 
   public String getUuid() {
@@ -60,20 +93,28 @@ public class RuleForIndexingDto {
     return repository;
   }
 
+  public void setRepository(String repository) {
+    this.repository = repository;
+  }
+
   public String getPluginRuleKey() {
     return pluginRuleKey;
+  }
+
+  public void setPluginRuleKey(String pluginRuleKey) {
+    this.pluginRuleKey = pluginRuleKey;
   }
 
   public String getName() {
     return name;
   }
 
-  public String getDescription() {
-    return description;
-  }
-
   public RuleDto.Format getDescriptionFormat() {
     return descriptionFormat;
+  }
+
+  public void setDescriptionFormat(RuleDto.Format descriptionFormat) {
+    this.descriptionFormat = descriptionFormat;
   }
 
   public Integer getSeverity() {
@@ -89,15 +130,15 @@ public class RuleForIndexingDto {
   }
 
   public Set<String> getSystemTags() {
-    return RuleDefinitionDto.deserializeTagsString(systemTags);
+    return Collections.unmodifiableSet(systemTags);
   }
 
   public Set<String> getTags() {
-    return RuleDefinitionDto.deserializeTagsString(tags);
+    return Collections.unmodifiableSet(tags);
   }
 
   public Set<String> getSecurityStandards() {
-    return RuleDefinitionDto.deserializeSecurityStandardsString(securityStandards);
+    return Collections.unmodifiableSet(securityStandards);
   }
 
   public String getTemplateRuleKey() {
@@ -143,5 +184,25 @@ public class RuleForIndexingDto {
 
   public RuleKey getRuleKey() {
     return RuleKey.of(repository, pluginRuleKey);
+  }
+
+  public Set<RuleDescriptionSectionDto> getRuleDescriptionSectionsDtos() {
+    return Collections.unmodifiableSet(ruleDescriptionSectionsDtos);
+  }
+
+  public void setRuleDescriptionSectionsDtos(Set<RuleDescriptionSectionDto> ruleDescriptionSectionsDtos) {
+    this.ruleDescriptionSectionsDtos = ruleDescriptionSectionsDtos;
+  }
+
+  public void setTemplateRuleKey(String templateRuleKey) {
+    this.templateRuleKey = templateRuleKey;
+  }
+
+  public void setTemplateRepository(String templateRepository) {
+    this.templateRepository = templateRepository;
+  }
+
+  public void setType(int type) {
+    this.type = type;
   }
 }

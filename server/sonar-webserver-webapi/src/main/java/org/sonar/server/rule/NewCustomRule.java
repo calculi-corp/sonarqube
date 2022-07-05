@@ -34,12 +34,11 @@ public class NewCustomRule {
   private String ruleKey;
   private RuleKey templateKey;
   private String name;
-  private String htmlDescription;
   private String markdownDescription;
   private String severity;
   private RuleStatus status;
   private RuleType type;
-  private final Map<String, String> parameters = new HashMap<>();
+  private Map<String, String> parameters = new HashMap<>();
 
   private boolean preventReactivation = false;
 
@@ -51,7 +50,6 @@ public class NewCustomRule {
     return ruleKey;
   }
 
-  @CheckForNull
   public RuleKey templateKey() {
     return templateKey;
   }
@@ -63,16 +61,6 @@ public class NewCustomRule {
 
   public NewCustomRule setName(@Nullable String name) {
     this.name = name;
-    return this;
-  }
-
-  @CheckForNull
-  public String htmlDescription() {
-    return htmlDescription;
-  }
-
-  public NewCustomRule setHtmlDescription(@Nullable String htmlDescription) {
-    this.htmlDescription = htmlDescription;
     return this;
   }
 
@@ -122,8 +110,7 @@ public class NewCustomRule {
   }
 
   public NewCustomRule setParameters(Map<String, String> params) {
-    this.parameters.clear();
-    this.parameters.putAll(params);
+    this.parameters = params;
     return this;
   }
 
@@ -147,5 +134,4 @@ public class NewCustomRule {
     newRule.templateKey = templateKey;
     return newRule;
   }
-
 }

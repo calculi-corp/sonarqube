@@ -19,7 +19,7 @@
  */
 import * as React from 'react';
 import { FormattedMessage } from 'react-intl';
-import { Link } from 'react-router';
+import { Link } from 'react-router-dom';
 import { translate } from '../../../../helpers/l10n';
 import { Component } from '../../../../types/types';
 import CodeSnippet from '../../../common/CodeSnippet';
@@ -34,7 +34,7 @@ export interface JavaGradleProps {
 
 export default function JavaGradle(props: JavaGradleProps) {
   const { host, component, token } = props;
-  const config = 'plugins {\n  id "org.sonarqube" version "3.3"\n}';
+  const config = 'plugins {\n  id "org.sonarqube" version "3.4.0.2513"\n}';
 
   const command = [
     './gradlew sonarqube',

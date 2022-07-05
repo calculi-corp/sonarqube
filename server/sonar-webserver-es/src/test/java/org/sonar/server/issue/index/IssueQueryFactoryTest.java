@@ -35,7 +35,7 @@ import org.sonar.db.component.ComponentDto;
 import org.sonar.db.component.SnapshotDto;
 import org.sonar.db.metric.MetricDto;
 import org.sonar.db.rule.RuleDbTester;
-import org.sonar.db.rule.RuleDefinitionDto;
+import org.sonar.db.rule.RuleDto;
 import org.sonar.db.user.UserDto;
 import org.sonar.server.issue.SearchRequest;
 import org.sonar.server.tester.UserSessionRule;
@@ -80,10 +80,8 @@ public class IssueQueryFactoryTest {
     ComponentDto module = db.components().insertComponent(newModuleDto(project));
     ComponentDto file = db.components().insertComponent(newFileDto(project));
 
-    RuleDefinitionDto rule1 = ruleDbTester.insert();
-    RuleDefinitionDto rule2 = ruleDbTester.insert();
-    ruleDbTester.insertOrUpdateMetadata(rule1, m -> m.setAdHocName(ruleAdHocName));
-    ruleDbTester.insertOrUpdateMetadata(rule2, m -> m.setAdHocName(ruleAdHocName));
+    RuleDto rule1 = ruleDbTester.insert(r -> r.setAdHocName(ruleAdHocName));
+    RuleDto rule2 = ruleDbTester.insert(r -> r.setAdHocName(ruleAdHocName));
     newRule(RuleKey.of("findbugs", "NullReference"));
     SearchRequest request = new SearchRequest()
       .setIssues(asList("anIssueKey"))
@@ -313,7 +311,6 @@ public class IssueQueryFactoryTest {
 
     assertThat(query.componentUuids()).isEmpty();
     assertThat(query.projectUuids()).isEmpty();
-    assertThat(query.moduleUuids()).isEmpty();
     assertThat(query.moduleRootUuids()).isEmpty();
     assertThat(query.directories()).isEmpty();
     assertThat(query.files()).isEmpty();
@@ -510,7 +507,6 @@ public class IssueQueryFactoryTest {
 
     IssueQuery query = underTest.create(request);
 
-    assertThat(query.moduleUuids()).containsOnly(dir.moduleUuid());
     assertThat(query.directories()).containsOnly(dir.path());
     assertThat(query.onComponentOnly()).isFalse();
   }

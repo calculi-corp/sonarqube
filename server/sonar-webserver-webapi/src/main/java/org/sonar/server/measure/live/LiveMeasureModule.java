@@ -25,7 +25,9 @@ public class LiveMeasureModule extends Module {
   @Override
   protected void configureModule() {
     add(
-      IssueMetricFormulaFactoryImpl.class,
+      MeasureUpdateFormulaFactoryImpl.class,
+      ComponentIndexFactory.class,
+      LiveMeasureTreeUpdaterImpl.class,
       LiveMeasureComputerImpl.class,
       LiveQualityGateComputerImpl.class);
   }

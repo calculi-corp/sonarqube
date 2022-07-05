@@ -19,16 +19,18 @@
  */
 package org.sonar.server.rule.ws;
 
+import java.util.Set;
 import org.sonar.api.server.ws.Request;
 import org.sonar.api.server.ws.Response;
 import org.sonar.api.server.ws.WebService;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
-import org.sonar.db.rule.RuleDefinitionDto;
+import org.sonar.db.rule.RuleDto;
 import org.sonarqube.ws.MediaTypes;
 import org.sonarqube.ws.Rules.ListResponse;
 
 import static com.google.common.base.Strings.nullToEmpty;
+import static java.util.stream.Collectors.toSet;
 
 public class ListAction implements RulesWsAction {
 
@@ -54,21 +56,24 @@ public class ListAction implements RulesWsAction {
     final ListResponse.Builder listResponseBuilder = ListResponse.newBuilder();
     final ListResponse.Rule.Builder ruleBuilder = ListResponse.Rule.newBuilder();
     try (DbSession dbSession = dbClient.openSession(false)) {
-      dbClient.ruleDao().selectEnabled(dbSession, resultContext -> {
-        RuleDefinitionDto dto = resultContext.getResultObject();
-        ruleBuilder
-          .clear()
-          .setRepository(dto.getRepositoryKey())
-          .setKey(dto.getRuleKey())
-          .setName(nullToEmpty(dto.getName()))
-          .setInternalKey(nullToEmpty(dto.getConfigKey()));
-        listResponseBuilder.addRules(ruleBuilder.build());
-      });
+      Set<ListResponse.Rule> rules = dbClient.ruleDao().selectEnabled(dbSession).stream()
+        .map(dto -> toRule(ruleBuilder, dto))
+        .collect(toSet());
+      listResponseBuilder.addAllRules(rules);
     }
-
     // JSON response is voluntarily not supported. This WS is for internal use.
     wsResponse.stream().setMediaType(MediaTypes.PROTOBUF);
     listResponseBuilder.build().writeTo(wsResponse.stream().output());
+  }
+
+  private static ListResponse.Rule toRule(ListResponse.Rule.Builder ruleBuilder, RuleDto dto) {
+    return ruleBuilder
+      .clear()
+      .setRepository(dto.getRepositoryKey())
+      .setKey(dto.getRuleKey())
+      .setName(nullToEmpty(dto.getName()))
+      .setInternalKey(nullToEmpty(dto.getConfigKey()))
+      .build();
   }
 
 }

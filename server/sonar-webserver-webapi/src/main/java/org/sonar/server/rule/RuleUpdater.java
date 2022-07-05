@@ -37,12 +37,13 @@ import org.sonar.api.rule.Severity;
 import org.sonar.api.server.ServerSide;
 import org.sonar.api.server.debt.DebtRemediationFunction;
 import org.sonar.api.utils.System2;
+import org.sonar.core.util.UuidFactory;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.qualityprofile.ActiveRuleDto;
 import org.sonar.db.qualityprofile.ActiveRuleParamDto;
 import org.sonar.db.qualityprofile.OrgActiveRuleDto;
-import org.sonar.db.rule.RuleDefinitionDto;
+import org.sonar.db.rule.RuleDescriptionSectionDto;
 import org.sonar.db.rule.RuleDto;
 import org.sonar.db.rule.RuleParamDto;
 import org.sonar.server.rule.index.RuleIndexer;
@@ -53,17 +54,20 @@ import static com.google.common.base.Strings.isNullOrEmpty;
 import static com.google.common.collect.FluentIterable.from;
 import static com.google.common.collect.Lists.newArrayList;
 import static org.apache.commons.lang.StringUtils.isBlank;
+import static org.sonar.db.rule.RuleDescriptionSectionDto.createDefaultRuleDescriptionSection;
 
 @ServerSide
 public class RuleUpdater {
 
   private final DbClient dbClient;
   private final RuleIndexer ruleIndexer;
+  private final UuidFactory uuidFactory;
   private final System2 system;
 
-  public RuleUpdater(DbClient dbClient, RuleIndexer ruleIndexer, System2 system) {
+  public RuleUpdater(DbClient dbClient, RuleIndexer ruleIndexer, UuidFactory uuidFactory, System2 system) {
     this.dbClient = dbClient;
     this.ruleIndexer = ruleIndexer;
+    this.uuidFactory = uuidFactory;
     this.system = system;
   }
 
@@ -131,13 +135,14 @@ public class RuleUpdater {
     rule.setName(name);
   }
 
-  private static void updateDescription(RuleUpdate update, RuleDto rule) {
+  private void updateDescription(RuleUpdate update, RuleDto rule) {
     String description = update.getMarkdownDescription();
     if (isNullOrEmpty(description)) {
       throw new IllegalArgumentException("The description is missing");
     }
-    rule.setDescription(description);
+    RuleDescriptionSectionDto descriptionSectionDto = createDefaultRuleDescriptionSection(uuidFactory.create(), description);
     rule.setDescriptionFormat(RuleDto.Format.MARKDOWN);
+    rule.replaceRuleDescriptionSectionDtos(List.of(descriptionSectionDto));
   }
 
   private static void updateSeverity(RuleUpdate update, RuleDto rule) {
@@ -213,7 +218,7 @@ public class RuleUpdater {
       RuleDto customRule = rule;
       String templateUuid = customRule.getTemplateUuid();
       checkNotNull(templateUuid, "Rule '%s' has no persisted template!", customRule);
-      Optional<RuleDefinitionDto> templateRule = dbClient.ruleDao().selectDefinitionByUuid(templateUuid, dbSession);
+      Optional<RuleDto> templateRule = dbClient.ruleDao().selectByUuid(templateUuid, dbSession);
       if (!templateRule.isPresent()) {
         throw new IllegalStateException(String.format("Template %s of rule %s does not exist",
           customRule.getTemplateUuid(), customRule.getKey()));
@@ -244,7 +249,7 @@ public class RuleUpdater {
 
       // Update rule param
       ruleParamDto.setDefaultValue(value);
-      dbClient.ruleDao().updateRuleParam(dbSession, customRule.getDefinition(), ruleParamDto);
+      dbClient.ruleDao().updateRuleParam(dbSession, customRule, ruleParamDto);
 
       if (value != null) {
         // Update linked active rule params or create new one
@@ -327,8 +332,7 @@ public class RuleUpdater {
 
   private void update(DbSession session, RuleDto rule) {
     rule.setUpdatedAt(system.now());
-    dbClient.ruleDao().update(session, rule.getDefinition());
-    dbClient.ruleDao().insertOrUpdate(session, rule.getMetadata());
+    dbClient.ruleDao().update(session, rule);
   }
 
 }

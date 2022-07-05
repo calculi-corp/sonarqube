@@ -26,8 +26,9 @@ import {
   Profile,
   searchQualityProfiles
 } from '../../api/quality-profiles';
-import { addGlobalSuccessMessage } from '../../app/utils/globalMessagesService';
+import withComponentContext from '../../app/components/componentContext/withComponentContext';
 import handleRequiredAuthorization from '../../app/utils/handleRequiredAuthorization';
+import { addGlobalSuccessMessage } from '../../helpers/globalMessages';
 import { translateWithParameters } from '../../helpers/l10n';
 import { isDefined } from '../../helpers/types';
 import { Component } from '../../types/types';
@@ -46,7 +47,7 @@ interface State {
   showProjectProfileInModal?: ProjectProfile;
 }
 
-export default class ProjectQualityProfilesApp extends React.PureComponent<Props, State> {
+export class ProjectQualityProfilesApp extends React.PureComponent<Props, State> {
   mounted = false;
   state: State = { loading: true };
 
@@ -291,3 +292,5 @@ export default class ProjectQualityProfilesApp extends React.PureComponent<Props
     );
   }
 }
+
+export default withComponentContext(ProjectQualityProfilesApp);

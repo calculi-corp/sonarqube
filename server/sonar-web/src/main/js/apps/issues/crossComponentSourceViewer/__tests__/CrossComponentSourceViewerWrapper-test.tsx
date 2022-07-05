@@ -22,24 +22,24 @@ import * as React from 'react';
 import { getDuplications } from '../../../../api/components';
 import { getIssueFlowSnippets } from '../../../../api/issues';
 import {
-  mockFlowLocation,
-  mockIssue,
   mockSnippetsByComponent,
   mockSourceLine,
   mockSourceViewerFile
-} from '../../../../helpers/testMocks';
+} from '../../../../helpers/mocks/sources';
+import { mockFlowLocation, mockIssue } from '../../../../helpers/testMocks';
 import { waitAndUpdate } from '../../../../helpers/testUtils';
 import CrossComponentSourceViewerWrapper from '../CrossComponentSourceViewerWrapper';
 
 jest.mock('../../../../api/issues', () => {
-  const { mockSnippetsByComponent } = jest.requireActual('../../../../helpers/testMocks');
+  const { mockSnippetsByComponent } = jest.requireActual('../../../../helpers/mocks/sources');
   return {
     getIssueFlowSnippets: jest.fn().mockResolvedValue({ 'main.js': mockSnippetsByComponent() })
   };
 });
 
 jest.mock('../../../../api/components', () => ({
-  getDuplications: jest.fn().mockResolvedValue({})
+  getDuplications: jest.fn().mockResolvedValue({}),
+  getComponentForSourceViewer: jest.fn().mockResolvedValue({})
 }));
 
 beforeEach(() => {
@@ -47,19 +47,26 @@ beforeEach(() => {
 });
 
 it('should render correctly', async () => {
-  const wrapper = shallowRender();
+  let wrapper = shallowRender();
   expect(wrapper).toMatchSnapshot();
 
   await waitAndUpdate(wrapper);
   expect(wrapper).toMatchSnapshot();
+
+  wrapper = shallowRender({ issue: mockIssue(true, { component: 'test.js', key: 'unknown' }) });
+  await waitAndUpdate(wrapper);
+
+  expect(wrapper).toMatchSnapshot('no component found');
 });
 
 it('Should fetch data', async () => {
   const wrapper = shallowRender();
-  wrapper.instance().fetchIssueFlowSnippets('124');
+  wrapper.instance().fetchIssueFlowSnippets();
   await waitAndUpdate(wrapper);
   expect(getIssueFlowSnippets).toHaveBeenCalledWith('1');
-  expect(wrapper.state('components')).toEqual({ 'main.js': mockSnippetsByComponent() });
+  expect(wrapper.state('components')).toEqual(
+    expect.objectContaining({ 'main.js': mockSnippetsByComponent() })
+  );
 
   (getIssueFlowSnippets as jest.Mock).mockClear();
   wrapper.setProps({ issue: mockIssue(true, { key: 'foo' }) });
@@ -125,6 +132,7 @@ function shallowRender(props: Partial<CrossComponentSourceViewerWrapper['props']
       locations={[mockFlowLocation()]}
       onIssueChange={jest.fn()}
       onLoaded={jest.fn()}
+      onIssueSelect={jest.fn()}
       onLocationSelect={jest.fn()}
       scroll={jest.fn()}
       selectedFlowIndex={0}

@@ -32,10 +32,9 @@ import org.sonar.api.rule.RuleKey;
 import org.sonar.api.rules.RuleType;
 import org.sonar.api.utils.Duration;
 import org.sonar.core.issue.DefaultIssue;
-import org.sonar.db.rule.RuleDefinitionDto;
+import org.sonar.db.rule.RuleDto;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class IssueDtoTest {
 
@@ -54,7 +53,6 @@ public class IssueDtoTest {
       .setComponentKey("org.sonar.sample:Sample")
       .setComponentUuid("CDEF")
       .setProjectUuid("GHIJ")
-      .setModuleUuid("BCDE")
       .setModuleUuidPath("ABCD.BCDE.")
       .setProjectKey("org.sonar.sample")
       .setStatus(Issue.STATUS_CLOSED)
@@ -79,7 +77,6 @@ public class IssueDtoTest {
     assertThat(issue.componentUuid()).isEqualTo("CDEF");
     assertThat(issue.projectUuid()).isEqualTo("GHIJ");
     assertThat(issue.componentKey()).isEqualTo("org.sonar.sample:Sample");
-    assertThat(issue.moduleUuid()).isEqualTo("BCDE");
     assertThat(issue.moduleUuidPath()).isEqualTo("ABCD.BCDE.");
     assertThat(issue.projectKey()).isEqualTo("org.sonar.sample");
     assertThat(issue.status()).isEqualTo(Issue.STATUS_CLOSED);
@@ -103,7 +100,7 @@ public class IssueDtoTest {
   public void set_rule() {
     IssueDto dto = new IssueDto()
       .setKee("100")
-      .setRule(new RuleDefinitionDto().setUuid("uuid-1").setRuleKey("AvoidCycle").setRepositoryKey("squid").setIsExternal(true))
+      .setRule(new RuleDto().setUuid("uuid-1").setRuleKey("AvoidCycle").setRepositoryKey("squid").setIsExternal(true))
       .setLanguage("xoo");
 
     assertThat(dto.getRuleUuid()).isEqualTo("uuid-1");
@@ -160,10 +157,10 @@ public class IssueDtoTest {
       .containsExactly(Set.of("todo"), "admin");
 
     assertThat(issueDto).extracting(IssueDto::isManualSeverity, IssueDto::getChecksum, IssueDto::getAssigneeUuid,
-      IssueDto::isExternal, IssueDto::getComponentUuid, IssueDto::getComponentKey, IssueDto::getModuleUuid,
+      IssueDto::isExternal, IssueDto::getComponentUuid, IssueDto::getComponentKey,
       IssueDto::getModuleUuidPath, IssueDto::getProjectUuid, IssueDto::getProjectKey,
       IssueDto::getRuleUuid)
-      .containsExactly(true, "123", "123", true, "123", "componentKey", "moduleUuid",
+      .containsExactly(true, "123", "123", true, "123", "componentKey",
         "path/to/module/uuid", "123", "projectKey", "ruleUuid");
 
     assertThat(issueDto.isQuickFixAvailable()).isTrue();
@@ -193,9 +190,9 @@ public class IssueDtoTest {
       .containsExactly(Set.of("todo"), "admin");
 
     assertThat(issueDto).extracting(IssueDto::isManualSeverity, IssueDto::getChecksum, IssueDto::getAssigneeUuid,
-      IssueDto::isExternal, IssueDto::getComponentUuid, IssueDto::getComponentKey, IssueDto::getModuleUuid,
+      IssueDto::isExternal, IssueDto::getComponentUuid, IssueDto::getComponentKey,
       IssueDto::getModuleUuidPath, IssueDto::getProjectUuid, IssueDto::getProjectKey)
-      .containsExactly(true, "123", "123", true, "123", "componentKey", "moduleUuid",
+      .containsExactly(true, "123", "123", true, "123", "componentKey",
         "path/to/module/uuid", "123", "projectKey");
 
     assertThat(issueDto.isQuickFixAvailable()).isTrue();
@@ -221,7 +218,6 @@ public class IssueDtoTest {
       .setTags(List.of("todo"))
       .setComponentUuid("123")
       .setComponentKey("componentKey")
-      .setModuleUuid("moduleUuid")
       .setModuleUuidPath("path/to/module/uuid")
       .setProjectUuid("123")
       .setProjectKey("projectKey")

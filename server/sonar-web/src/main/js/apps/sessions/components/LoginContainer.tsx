@@ -17,20 +17,18 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { Location } from 'history';
 import * as React from 'react';
 import { logIn } from '../../../api/auth';
 import { getIdentityProviders } from '../../../api/users';
-import { addGlobalErrorMessage } from '../../../app/utils/globalMessagesService';
+import { Location, withRouter } from '../../../components/hoc/withRouter';
+import { addGlobalErrorMessage } from '../../../helpers/globalMessages';
 import { translate } from '../../../helpers/l10n';
 import { getReturnUrl } from '../../../helpers/urls';
 import { IdentityProvider } from '../../../types/types';
 import Login from './Login';
 
 interface Props {
-  location: Pick<Location, 'hash' | 'pathname' | 'query'> & {
-    query: { advanced?: string; return_to?: string };
-  };
+  location: Location;
 }
 interface State {
   identityProviders?: IdentityProvider[];
@@ -90,4 +88,4 @@ export class LoginContainer extends React.PureComponent<Props, State> {
   }
 }
 
-export default LoginContainer;
+export default withRouter(LoginContainer);

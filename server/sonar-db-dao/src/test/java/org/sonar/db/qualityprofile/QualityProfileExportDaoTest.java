@@ -35,8 +35,7 @@ import org.sonar.api.rule.RuleStatus;
 import org.sonar.api.rules.RuleType;
 import org.sonar.db.DbSession;
 import org.sonar.db.DbTester;
-import org.sonar.db.rule.RuleDefinitionDto;
-import org.sonar.db.rule.RuleMetadataDto;
+import org.sonar.db.rule.RuleDto;
 import org.sonar.db.rule.RuleParamDto;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -46,15 +45,15 @@ public class QualityProfileExportDaoTest {
   @Rule
   public DbTester db = DbTester.create(new AlwaysIncreasingSystem2());
 
-  private DbSession dbSession = db.getSession();
-  private QualityProfileExportDao underTest = db.getDbClient().qualityProfileExportDao();
+  private final DbSession dbSession = db.getSession();
+  private final QualityProfileExportDao underTest = db.getDbClient().qualityProfileExportDao();
 
   @Test
   public void selectRulesByProfile_ready_rules_only() {
     String language = "java";
-    RuleDefinitionDto rule1 = createRule(language);
-    RuleDefinitionDto rule2 = createRule(language);
-    RuleDefinitionDto rule3 = createRule(language);
+    RuleDto rule1 = createRule(language);
+    RuleDto rule2 = createRule(language);
+    RuleDto rule3 = createRule(language);
     createRule(language, RuleStatus.REMOVED);
 
     QProfileDto profile = createProfile(language);
@@ -71,16 +70,16 @@ public class QualityProfileExportDaoTest {
   @Test
   public void selectRulesByProfile_verify_columns() {
     String language = "java";
-    RuleDefinitionDto ruleTemplate = createRule(language);
-    RuleDefinitionDto customRule = createRule(language, RuleStatus.READY, ruleTemplate.getUuid());
-    RuleMetadataDto customRuleMetadata = createRuleMetadata(new RuleMetadataDto()
-      .setRuleUuid(customRule.getUuid())
-      .setNoteData("Extended description")
-      .setTags(Sets.newHashSet("tag1", "tag2", "tag3")));
+    RuleDto ruleTemplate = createRule(language);
+    RuleDto customRule = createRule(language, RuleStatus.READY, ruleTemplate.getUuid());
+    customRule.setNoteData("Extended description")
+      .setTags(Sets.newHashSet("tag1", "tag2", "tag3"));
+    db.rules().update(customRule);
 
-    RuleDefinitionDto rule = createRule(language, RuleStatus.READY, null);
-    RuleMetadataDto ruleMetadata = createRuleMetadata(new RuleMetadataDto()
-      .setRuleUuid(rule.getUuid()));
+    var customRuleContent = customRule.getDefaultRuleDescriptionSection().getContent();
+
+    RuleDto rule = createRule(language, RuleStatus.READY, null);
+    var ruleContent = rule.getDefaultRuleDescriptionSection().getContent();
     QProfileDto profile = createProfile(language);
 
     List<ActiveRuleDto> activeRules = activate(profile, customRule, rule);
@@ -94,12 +93,12 @@ public class QualityProfileExportDaoTest {
     assertThat(exportCustomRuleDto).isNotNull();
     assertThat(exportCustomRuleDto.isCustomRule()).isTrue();
     assertThat(exportCustomRuleDto.getParams()).isEmpty();
-    assertThat(exportCustomRuleDto.getDescription()).isEqualTo(customRule.getDescription());
-    assertThat(exportCustomRuleDto.getExtendedDescription()).isEqualTo(customRuleMetadata.getNoteData());
+    assertThat(exportCustomRuleDto.getDescriptionOrThrow()).isEqualTo(customRuleContent);
+    assertThat(exportCustomRuleDto.getExtendedDescription()).isEqualTo(customRule.getNoteData());
     assertThat(exportCustomRuleDto.getName()).isEqualTo(customRule.getName());
     assertThat(exportCustomRuleDto.getRuleKey()).isEqualTo(customRule.getKey());
     assertThat(exportCustomRuleDto.getRuleType()).isEqualTo(RuleType.valueOf(customRule.getType()));
-    assertThat(exportCustomRuleDto.getTags()).isEqualTo(String.join(",", customRuleMetadata.getTags()));
+    assertThat(exportCustomRuleDto.getTags()).isEqualTo(String.join(",", customRule.getTags()));
     assertThat(exportCustomRuleDto.getTemplateRuleKey()).isEqualTo(ruleTemplate.getKey());
 
     ActiveRuleDto activeCustomRule = activeRules.stream().filter(activeRuleDto -> activeRuleDto.getRuleKey().equals(customRule.getKey())).findFirst().get();
@@ -110,8 +109,8 @@ public class QualityProfileExportDaoTest {
     assertThat(exportRuleDto).isNotNull();
     assertThat(exportRuleDto.isCustomRule()).isFalse();
     assertThat(exportRuleDto.getParams()).isEmpty();
-    assertThat(exportRuleDto.getDescription()).isEqualTo(rule.getDescription());
-    assertThat(exportRuleDto.getExtendedDescription()).isEqualTo(ruleMetadata.getNoteData());
+    assertThat(exportRuleDto.getDescriptionOrThrow()).isEqualTo(ruleContent);
+    assertThat(exportRuleDto.getExtendedDescription()).isEqualTo(rule.getNoteData());
     assertThat(exportRuleDto.getName()).isEqualTo(rule.getName());
     assertThat(exportRuleDto.getRuleKey()).isEqualTo(rule.getKey());
     assertThat(exportRuleDto.getRuleType()).isEqualTo(RuleType.valueOf(rule.getType()));
@@ -124,7 +123,7 @@ public class QualityProfileExportDaoTest {
   public void selectRulesByProfile_verify_rows_over_1000() {
     String language = "java";
     int numberOfParamsToCreate = 1005;
-    RuleDefinitionDto rule = createRule(language);
+    RuleDto rule = createRule(language);
     List<RuleParamDto> ruleParams = addParamsToRule(rule, numberOfParamsToCreate);
 
     QProfileDto profile = createProfile(language);
@@ -144,14 +143,14 @@ public class QualityProfileExportDaoTest {
   @Test
   public void selectRulesByProfile_params_assigned_correctly() {
     String language = "java";
-    RuleDefinitionDto firstRule = createRule(language);
+    RuleDto firstRule = createRule(language);
     List<RuleParamDto> ruleParamsOfFirstRule = addParamsToRule(firstRule, 2);
 
-    RuleDefinitionDto secondRule = createRule(language);
+    RuleDto secondRule = createRule(language);
     List<RuleParamDto> ruleParamsOfSecondRule = addParamsToRule(secondRule, 3);
 
     String otherLanguage = "js";
-    RuleDefinitionDto thirdRule = createRule(otherLanguage);
+    RuleDto thirdRule = createRule(otherLanguage);
     List<RuleParamDto> ruleParamsOfThirdRule = addParamsToRule(thirdRule, 4);
 
     QProfileDto profile = createProfile(language);
@@ -197,41 +196,37 @@ public class QualityProfileExportDaoTest {
     return found.get();
   }
 
-  private List<RuleParamDto> addParamsToRule(RuleDefinitionDto firstRule, int numberOfParams) {
+  private List<RuleParamDto> addParamsToRule(RuleDto firstRule, int numberOfParams) {
     return IntStream.range(0, numberOfParams)
       .mapToObj(value -> db.rules().insertRuleParam(firstRule,
         ruleParamDto -> ruleParamDto.setName("name_" + firstRule.getUuid() + "_" + value)))
       .collect(Collectors.toList());
   }
 
-  private RuleDefinitionDto createRule(String language) {
+  private RuleDto createRule(String language) {
     return createRule(language, RuleStatus.READY);
   }
 
-  private RuleDefinitionDto createRule(String language, RuleStatus status) {
+  private RuleDto createRule(String language, RuleStatus status) {
     return createRule(language, status, null);
   }
 
-  private RuleDefinitionDto createRule(String language, RuleStatus status, @Nullable String templateUuid) {
+  private RuleDto createRule(String language, RuleStatus status, @Nullable String templateUuid) {
     return db.rules().insert(ruleDefinitionDto -> ruleDefinitionDto.setRepositoryKey("repoKey").setLanguage(language).setStatus(status)
       .setTemplateUuid(templateUuid));
-  }
-
-  private RuleMetadataDto createRuleMetadata(RuleMetadataDto metadataDto) {
-    return db.rules().insertOrUpdateMetadata(metadataDto);
   }
 
   private QProfileDto createProfile(String lanugage) {
     return db.qualityProfiles().insert(p -> p.setLanguage(lanugage));
   }
 
-  private List<ActiveRuleDto> activate(QProfileDto profile, RuleDefinitionDto... rules) {
+  private List<ActiveRuleDto> activate(QProfileDto profile, RuleDto... rules) {
     return Stream.of(rules)
       .map(ruleDefinitionDto -> db.qualityProfiles().activateRule(profile, ruleDefinitionDto))
       .collect(Collectors.toList());
   }
 
-  private ActiveRuleDto activate(QProfileDto profile, RuleDefinitionDto rule, Collection<RuleParamDto> params) {
+  private ActiveRuleDto activate(QProfileDto profile, RuleDto rule, Collection<RuleParamDto> params) {
     ActiveRuleDto activeRule = db.qualityProfiles().activateRule(profile, rule);
 
     params.forEach(ruleParamDto -> {

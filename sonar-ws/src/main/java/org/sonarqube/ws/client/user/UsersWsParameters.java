@@ -27,13 +27,13 @@ public class UsersWsParameters {
   public static final String ACTION_CREATE = "create";
   public static final String ACTION_DEACTIVATE = "deactivate";
   public static final String ACTION_UPDATE = "update";
-  public static final String ACTION_SKIP_ONBOARDING_TUTORIAL = "skip_onboarding_tutorial";
   public static final String ACTION_CURRENT = "current";
   public static final String ACTION_UPDATE_IDENTITY_PROVIDER = "update_identity_provider";
   public static final String ACTION_DISMISS_SONARLINT_AD = "dismiss_sonarlint_ad";
 
   public static final String PARAM_LOGIN = "login";
   public static final String PARAM_PASSWORD = "password";
+  public static final String PARAM_PREVIOUS_PASSWORD = "previousPassword";
   public static final String PARAM_NAME = "name";
   public static final String PARAM_EMAIL = "email";
 

@@ -32,10 +32,11 @@ import org.sonar.core.issue.FieldDiffs;
 import org.sonar.core.util.SequenceUuidFactory;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbTester;
+import org.sonar.db.component.BranchType;
 import org.sonar.db.component.ComponentDto;
 import org.sonar.db.issue.IssueDbTester;
 import org.sonar.db.issue.IssueDto;
-import org.sonar.db.rule.RuleDefinitionDto;
+import org.sonar.db.rule.RuleDto;
 import org.sonar.db.user.UserDto;
 import org.sonar.server.es.EsTester;
 import org.sonar.server.exceptions.ForbiddenException;
@@ -49,7 +50,9 @@ import org.sonar.server.issue.index.IssueIndexer;
 import org.sonar.server.issue.index.IssueIteratorFactory;
 import org.sonar.server.issue.notification.IssuesChangesNotificationSerializer;
 import org.sonar.server.notification.NotificationManager;
+import org.sonar.server.pushapi.issues.IssueChangeEventService;
 import org.sonar.server.rule.DefaultRuleFinder;
+import org.sonar.server.rule.RuleDescriptionFormatter;
 import org.sonar.server.tester.UserSessionRule;
 import org.sonar.server.ws.TestRequest;
 import org.sonar.server.ws.TestResponse;
@@ -62,10 +65,14 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.sonar.api.rule.Severity.MAJOR;
 import static org.sonar.api.rule.Severity.MINOR;
+import static org.sonar.api.rules.RuleType.CODE_SMELL;
 import static org.sonar.api.web.UserRole.ISSUE_ADMIN;
 import static org.sonar.api.web.UserRole.USER;
+import static org.sonar.db.component.ComponentTesting.newFileDto;
+import static org.sonar.db.issue.IssueTesting.newIssue;
 
 public class SetSeverityActionTest {
 
@@ -83,12 +90,14 @@ public class SetSeverityActionTest {
   private OperationResponseWriter responseWriter = mock(OperationResponseWriter.class);
   private ArgumentCaptor<SearchResponseData> preloadedSearchResponseDataCaptor = ArgumentCaptor.forClass(SearchResponseData.class);
 
+  private IssueChangeEventService issueChangeEventService = mock(IssueChangeEventService.class);
   private IssueIndexer issueIndexer = new IssueIndexer(es.client(), dbClient, new IssueIteratorFactory(dbClient), null);
   private TestIssueChangePostProcessor issueChangePostProcessor = new TestIssueChangePostProcessor();
   private IssuesChangesNotificationSerializer issuesChangesSerializer = new IssuesChangesNotificationSerializer();
-  private WsActionTester tester = new WsActionTester(new SetSeverityAction(userSession, dbClient, new IssueFinder(dbClient, userSession), new IssueFieldsSetter(),
+  private WsActionTester tester = new WsActionTester(new SetSeverityAction(userSession, dbClient, issueChangeEventService,
+    new IssueFinder(dbClient, userSession), new IssueFieldsSetter(),
     new IssueUpdater(dbClient,
-      new WebIssueStorage(system2, dbClient, new DefaultRuleFinder(dbClient), issueIndexer, new SequenceUuidFactory()),
+      new WebIssueStorage(system2, dbClient, new DefaultRuleFinder(dbClient, mock(RuleDescriptionFormatter.class)), issueIndexer, new SequenceUuidFactory()),
       mock(NotificationManager.class), issueChangePostProcessor, issuesChangesSerializer),
     responseWriter));
 
@@ -101,6 +110,7 @@ public class SetSeverityActionTest {
 
     verify(responseWriter).write(eq(issueDto.getKey()), preloadedSearchResponseDataCaptor.capture(), any(Request.class), any(Response.class));
     verifyContentOfPreloadedSearchResponseData(issueDto);
+    verify(issueChangeEventService).distributeIssueChangeEvent(any(), any(), any(), any(), any(), any());
 
     IssueDto issueReloaded = dbClient.issueDao().selectByKey(dbTester.getSession(), issueDto.getKey()).get();
     assertThat(issueReloaded.getSeverity()).isEqualTo(MINOR);
@@ -108,6 +118,26 @@ public class SetSeverityActionTest {
     assertThat(issueChangePostProcessor.calledComponents())
       .extracting(ComponentDto::uuid)
       .containsExactlyInAnyOrder(issueDto.getComponentUuid());
+  }
+
+  @Test
+  public void set_severity_is_not_distributed_for_pull_request() {
+    RuleDto rule = dbTester.rules().insertIssueRule();
+    ComponentDto project = dbTester.components().insertPrivateProject();
+
+    ComponentDto pullRequest = dbTester.components().insertProjectBranch(project, b -> b.setKey("myBranch1")
+      .setBranchType(BranchType.PULL_REQUEST)
+      .setMergeBranchUuid(project.uuid()));
+
+    ComponentDto file = dbTester.components().insertComponent(newFileDto(pullRequest));
+    IssueDto issue = newIssue(rule, pullRequest, file).setType(CODE_SMELL).setSeverity(MAJOR);
+    issueDbTester.insertIssue(issue);
+
+    setUserWithBrowseAndAdministerIssuePermission(issue);
+
+    call(issue.getKey(), MINOR);
+
+    verifyNoInteractions(issueChangeEventService);
   }
 
   @Test
@@ -206,7 +236,7 @@ public class SetSeverityActionTest {
       .extracting(IssueDto::getKey)
       .containsOnly(issue.getKey());
     assertThat(preloadedSearchResponseData.getRules())
-      .extracting(RuleDefinitionDto::getKey)
+      .extracting(RuleDto::getKey)
       .containsOnly(issue.getRuleKey());
     assertThat(preloadedSearchResponseData.getComponents())
       .extracting(ComponentDto::uuid)

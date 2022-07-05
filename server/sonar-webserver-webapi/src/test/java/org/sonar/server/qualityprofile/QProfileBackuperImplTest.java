@@ -35,13 +35,14 @@ import org.sonar.api.rule.RuleKey;
 import org.sonar.api.rule.RuleStatus;
 import org.sonar.api.rules.RuleType;
 import org.sonar.api.utils.System2;
+import org.sonar.core.util.UuidFactoryFast;
 import org.sonar.db.DbSession;
 import org.sonar.db.DbTester;
 import org.sonar.db.qualityprofile.ActiveRuleDto;
 import org.sonar.db.qualityprofile.ActiveRuleParamDto;
 import org.sonar.db.qualityprofile.QProfileDto;
 import org.sonar.db.qualityprofile.QualityProfileTesting;
-import org.sonar.db.rule.RuleDefinitionDto;
+import org.sonar.db.rule.RuleDto;
 import org.sonar.db.rule.RuleParamDto;
 import org.sonar.server.qualityprofile.builtin.QProfileName;
 import org.sonar.server.rule.RuleCreator;
@@ -54,6 +55,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.sonar.db.rule.RuleDescriptionSectionDto.createDefaultRuleDescriptionSection;
+import static org.sonar.db.rule.RuleTesting.newRule;
+import static org.sonar.db.rule.RuleTesting.newRuleWithoutDescriptionSection;
 
 public class QProfileBackuperImplTest {
 
@@ -76,7 +80,7 @@ public class QProfileBackuperImplTest {
 
   @Test
   public void backup_generates_xml_file() {
-    RuleDefinitionDto rule = createRule();
+    RuleDto rule = createRule();
     QProfileDto profile = createProfile(rule.getLanguage());
     ActiveRuleDto activeRule = activate(profile, rule);
 
@@ -100,7 +104,7 @@ public class QProfileBackuperImplTest {
 
   @Test
   public void backup_rules_having_parameters() {
-    RuleDefinitionDto rule = createRule();
+    RuleDto rule = createRule();
     RuleParamDto param = db.rules().insertRuleParam(rule);
     QProfileDto profile = createProfile(rule.getLanguage());
     ActiveRuleDto activeRule = activate(profile, rule, param);
@@ -123,7 +127,7 @@ public class QProfileBackuperImplTest {
 
   @Test
   public void backup_empty_profile() {
-    RuleDefinitionDto rule = createRule();
+    RuleDto rule = createRule();
     QProfileDto profile = createProfile(rule.getLanguage());
 
     StringWriter writer = new StringWriter();
@@ -138,13 +142,13 @@ public class QProfileBackuperImplTest {
 
   @Test
   public void backup_custom_rules_with_params() {
-    RuleDefinitionDto templateRule = db.rules().insert(ruleDefinitionDto -> ruleDefinitionDto
+    RuleDto templateRule = db.rules().insert(ruleDefinitionDto -> ruleDefinitionDto
       .setIsTemplate(true));
-    RuleDefinitionDto rule = db.rules().insert(ruleDefinitionDto -> ruleDefinitionDto
-      .setDescription("custom rule description")
-      .setName("custom rule name")
-      .setStatus(RuleStatus.READY)
-      .setTemplateUuid(templateRule.getUuid()));
+    RuleDto rule = db.rules().insert(
+      newRule(createDefaultRuleDescriptionSection(UuidFactoryFast.getInstance().create(), "custom rule description"))
+        .setName("custom rule name")
+        .setStatus(RuleStatus.READY)
+        .setTemplateUuid(templateRule.getUuid()));
     RuleParamDto param = db.rules().insertRuleParam(rule);
     QProfileDto profile = createProfile(rule.getLanguage());
     ActiveRuleDto activeRule = activate(profile, rule, param);
@@ -163,7 +167,34 @@ public class QProfileBackuperImplTest {
       "<priority>" + activeRule.getSeverityString() + "</priority>" +
       "<name>" + rule.getName() + "</name>" +
       "<templateKey>" + templateRule.getKey().rule() + "</templateKey>" +
-      "<description>" + rule.getDescription() + "</description>" +
+      "<description>" + rule.getDefaultRuleDescriptionSection().getContent() + "</description>" +
+      "<parameters><parameter>" +
+      "<key>" + param.getName() + "</key>" +
+      "<value>20</value>" +
+      "</parameter></parameters>" +
+      "</rule></rules></profile>");
+  }
+
+  @Test
+  public void backup_custom_rules_without_description_section() {
+    var rule = newRuleWithoutDescriptionSection();
+    db.rules().insert(rule);
+    RuleParamDto param = db.rules().insertRuleParam(rule);
+    QProfileDto profile = createProfile(rule.getLanguage());
+    ActiveRuleDto activeRule = activate(profile, rule, param);
+
+    StringWriter writer = new StringWriter();
+    underTest.backup(db.getSession(), profile, writer);
+
+    assertThat(writer).hasToString("<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
+      "<profile>" +
+      "<name>" + profile.getName() + "</name>" +
+      "<language>" + profile.getLanguage() + "</language>" +
+      "<rules><rule>" +
+      "<repositoryKey>" + rule.getRepositoryKey() + "</repositoryKey>" +
+      "<key>" + rule.getKey().rule() + "</key>" +
+      "<type>" + RuleType.valueOf(rule.getType()) + "</type>" +
+      "<priority>" + activeRule.getSeverityString() + "</priority>" +
       "<parameters><parameter>" +
       "<key>" + param.getName() + "</key>" +
       "<value>20</value>" +
@@ -355,7 +386,29 @@ public class QProfileBackuperImplTest {
 
   @Test
   public void copy_profile() {
-    RuleDefinitionDto rule = createRule();
+    RuleDto rule = createRule();
+    RuleParamDto param = db.rules().insertRuleParam(rule);
+    QProfileDto from = createProfile(rule.getLanguage());
+    ActiveRuleDto activeRule = activate(from, rule, param);
+
+    QProfileDto to = createProfile(rule.getLanguage());
+    underTest.copy(db.getSession(), from, to);
+
+    assertThat(reset.calledActivations).extracting(RuleActivation::getRuleUuid).containsOnly(activeRule.getRuleUuid());
+    assertThat(reset.calledActivations.get(0).getParameter(param.getName())).isEqualTo("20");
+    assertThat(reset.calledProfile).isEqualTo(to);
+  }
+
+  @Test
+  public void copy_profile_with_custom_rule() {
+    RuleDto templateRule = db.rules().insert(ruleDefinitionDto -> ruleDefinitionDto
+      .setIsTemplate(true));
+    RuleDto rule = db.rules().insert(
+      newRule(createDefaultRuleDescriptionSection(UuidFactoryFast.getInstance().create(), "custom rule description"))
+        .setName("custom rule name")
+        .setStatus(RuleStatus.READY)
+        .setTemplateUuid(templateRule.getUuid()));
+
     RuleParamDto param = db.rules().insertRuleParam(rule);
     QProfileDto from = createProfile(rule.getLanguage());
     ActiveRuleDto activeRule = activate(from, rule, param);
@@ -431,7 +484,7 @@ public class QProfileBackuperImplTest {
       .hasMessage("The quality profile cannot be restored as it contains rules from external rule engines: sonarjs:s001");
   }
 
-  private RuleDefinitionDto createRule() {
+  private RuleDto createRule() {
     return db.rules().insert();
   }
 
@@ -439,11 +492,11 @@ public class QProfileBackuperImplTest {
     return db.qualityProfiles().insert(p -> p.setLanguage(language));
   }
 
-  private ActiveRuleDto activate(QProfileDto profile, RuleDefinitionDto rule) {
+  private ActiveRuleDto activate(QProfileDto profile, RuleDto rule) {
     return db.qualityProfiles().activateRule(profile, rule);
   }
 
-  private ActiveRuleDto activate(QProfileDto profile, RuleDefinitionDto rule, RuleParamDto param) {
+  private ActiveRuleDto activate(QProfileDto profile, RuleDto rule, RuleParamDto param) {
     ActiveRuleDto activeRule = db.qualityProfiles().activateRule(profile, rule);
     ActiveRuleParamDto dto = ActiveRuleParamDto.createFor(param)
       .setValue("20")

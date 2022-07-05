@@ -18,11 +18,11 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import { shallow } from 'enzyme';
-import key from 'keymaster';
 import * as React from 'react';
 import { searchIssues } from '../../../../api/issues';
+import { getRuleDetails } from '../../../../api/rules';
 import handleRequiredAuthentication from '../../../../helpers/handleRequiredAuthentication';
-import { KeyboardCodes, KeyboardKeys } from '../../../../helpers/keycodes';
+import { KeyboardKeys } from '../../../../helpers/keycodes';
 import { mockPullRequest } from '../../../../helpers/mocks/branch-like';
 import { mockComponent } from '../../../../helpers/mocks/component';
 import {
@@ -33,14 +33,13 @@ import {
 } from '../../../../helpers/pages';
 import {
   mockCurrentUser,
-  mockEvent,
   mockIssue,
   mockLocation,
   mockLoggedInUser,
   mockRawIssue,
   mockRouter
 } from '../../../../helpers/testMocks';
-import { KEYCODE_MAP, keydown, waitAndUpdate } from '../../../../helpers/testUtils';
+import { keydown, mockEvent, waitAndUpdate } from '../../../../helpers/testUtils';
 import { ComponentQualifier } from '../../../../types/component';
 import { ReferencedComponent } from '../../../../types/issues';
 import { Issue, Paging } from '../../../../types/types';
@@ -53,8 +52,9 @@ import {
   selectPreviousLocation
 } from '../../actions';
 import BulkChangeModal from '../BulkChangeModal';
-import App from '../IssuesApp';
+import { App } from '../IssuesApp';
 import IssuesSourceViewer from '../IssuesSourceViewer';
+import IssueViewerTabs from '../IssueTabViewer';
 
 jest.mock('../../../../helpers/pages', () => ({
   addSideBarClass: jest.fn(),
@@ -65,29 +65,12 @@ jest.mock('../../../../helpers/pages', () => ({
 
 jest.mock('../../../../helpers/handleRequiredAuthentication', () => jest.fn());
 
-jest.mock('keymaster', () => {
-  const key: any = (bindKey: string, _: string, callback: Function) => {
-    document.addEventListener('keydown', (event: KeyboardEvent) => {
-      const keymasterCode = event.code && KEYCODE_MAP[event.code as KeyboardCodes];
-      if (keymasterCode && bindKey.split(',').includes(keymasterCode)) {
-        return callback();
-      }
-      return true;
-    });
-  };
-  let scope = 'issues';
-
-  key.getScope = () => scope;
-  key.setScope = (newScope: string) => {
-    scope = newScope;
-  };
-  key.deleteScope = jest.fn();
-
-  return key;
-});
-
 jest.mock('../../../../api/issues', () => ({
   searchIssues: jest.fn().mockResolvedValue({ facets: [], issues: [] })
+}));
+
+jest.mock('../../../../api/rules', () => ({
+  getRuleDetails: jest.fn()
 }));
 
 const RAW_ISSUES = [
@@ -107,17 +90,7 @@ const PAGING = { pageIndex: 1, pageSize: 100, total: 4 };
 
 const referencedComponent: ReferencedComponent = { key: 'foo-key', name: 'bar', uuid: 'foo-uuid' };
 
-const originalAddEventListener = window.addEventListener;
-const originalRemoveEventListener = window.removeEventListener;
-
 beforeEach(() => {
-  Object.defineProperty(window, 'addEventListener', {
-    value: jest.fn()
-  });
-  Object.defineProperty(window, 'removeEventListener', {
-    value: jest.fn()
-  });
-
   (searchIssues as jest.Mock).mockResolvedValue({
     components: [referencedComponent],
     effortTotal: 1,
@@ -128,17 +101,12 @@ beforeEach(() => {
     rules: [],
     users: []
   });
+
+  (getRuleDetails as jest.Mock).mockResolvedValue({ rule: { test: 'test' } });
 });
 
 afterEach(() => {
-  Object.defineProperty(window, 'addEventListener', {
-    value: originalAddEventListener
-  });
-  Object.defineProperty(window, 'removeEventListener', {
-    value: originalRemoveEventListener
-  });
-
-  jest.clearAllMocks();
+  // jest.clearAllMocks();
   (searchIssues as jest.Mock).mockReset();
 });
 
@@ -234,51 +202,65 @@ it('should open standard facets for vulnerabilities and hotspots', () => {
 it('should switch to source view if an issue is selected', async () => {
   const wrapper = shallowRender();
   await waitAndUpdate(wrapper);
-  expect(wrapper.find(IssuesSourceViewer).exists()).toBe(false);
+  expect(wrapper.find(IssueViewerTabs).exists()).toBe(false);
 
   wrapper.setProps({ location: mockLocation({ query: { open: 'third' } }) });
   await waitAndUpdate(wrapper);
-  expect(wrapper.find(IssuesSourceViewer).exists()).toBe(true);
+  expect(
+    wrapper
+      .find(IssueViewerTabs)
+      .dive()
+      .find(IssuesSourceViewer)
+      .exists()
+  ).toBe(true);
 });
 
 it('should correctly bind key events for issue navigation', async () => {
   const push = jest.fn();
+  const addEventListenerSpy = jest.spyOn(document, 'addEventListener');
   const wrapper = shallowRender({ router: mockRouter({ push }) });
   await waitAndUpdate(wrapper);
 
+  expect(addEventListenerSpy).toBeCalledTimes(2);
+
   expect(wrapper.state('selected')).toBe(ISSUES[0].key);
 
-  keydown({ code: KeyboardCodes.DownArrow });
+  keydown({ key: KeyboardKeys.DownArrow });
   expect(wrapper.state('selected')).toBe(ISSUES[1].key);
 
-  keydown({ code: KeyboardCodes.UpArrow });
-  keydown({ code: KeyboardCodes.UpArrow });
+  keydown({ key: KeyboardKeys.UpArrow });
+  keydown({ key: KeyboardKeys.UpArrow });
   expect(wrapper.state('selected')).toBe(ISSUES[0].key);
 
-  keydown({ code: KeyboardCodes.DownArrow });
-  keydown({ code: KeyboardCodes.DownArrow });
-  keydown({ code: KeyboardCodes.DownArrow });
-  keydown({ code: KeyboardCodes.DownArrow });
-  keydown({ code: KeyboardCodes.DownArrow });
-  keydown({ code: KeyboardCodes.DownArrow });
+  keydown({ key: KeyboardKeys.DownArrow });
+  keydown({ key: KeyboardKeys.DownArrow });
+  keydown({ key: KeyboardKeys.DownArrow });
+  keydown({ key: KeyboardKeys.DownArrow });
+  keydown({ key: KeyboardKeys.DownArrow });
+  keydown({ key: KeyboardKeys.DownArrow });
   expect(wrapper.state('selected')).toBe(ISSUES[3].key);
 
-  keydown({ code: KeyboardCodes.RightArrow });
+  keydown({ key: KeyboardKeys.RightArrow, ctrlKey: true });
+  expect(push).not.toBeCalled();
+  keydown({ key: KeyboardKeys.RightArrow });
   expect(push).toBeCalledTimes(1);
 
-  keydown({ code: KeyboardCodes.LeftArrow });
+  keydown({ key: KeyboardKeys.LeftArrow });
   expect(push).toBeCalledTimes(2);
-  expect(window.addEventListener).toBeCalledTimes(2);
+
+  addEventListenerSpy.mockReset();
 });
 
 it('should correctly clean up on unmount', () => {
+  const removeEventListenerSpy = jest.spyOn(document, 'removeEventListener');
   const wrapper = shallowRender();
 
   wrapper.unmount();
-  expect(key.deleteScope).toBeCalled();
   expect(removeSideBarClass).toBeCalled();
   expect(removeWhitePageClass).toBeCalled();
-  expect(window.removeEventListener).toBeCalledTimes(2);
+  expect(removeEventListenerSpy).toBeCalledTimes(2);
+
+  removeEventListenerSpy.mockReset();
 });
 
 it('should be able to bulk change specific issues', async () => {
@@ -369,21 +351,6 @@ it('should check max 500 issues', async () => {
   expect(wrapper.find('#issues-bulk-change')).toMatchSnapshot();
 });
 
-it('should fetch issues for component', async () => {
-  (searchIssues as jest.Mock).mockImplementation(mockSearchIssuesResponse());
-  const wrapper = shallowRender({
-    location: mockLocation({
-      query: { open: '0' }
-    })
-  });
-  const instance = wrapper.instance();
-  await waitAndUpdate(wrapper);
-  expect(wrapper.state('issues')).toHaveLength(2);
-
-  await instance.fetchIssuesForComponent('', 0, 30);
-  expect(wrapper.state('issues')).toHaveLength(6);
-});
-
 it('should display the right facets open', () => {
   expect(
     shallowRender({
@@ -460,32 +427,28 @@ describe('keydown event handler', () => {
     jest.resetAllMocks();
   });
 
-  afterEach(() => {
-    key.setScope('issues');
-  });
-
   it('should handle alt', () => {
     instance.handleKeyDown(mockEvent({ key: KeyboardKeys.Alt }));
     expect(instance.setState).toHaveBeenCalledWith(enableLocationsNavigator);
   });
   it('should handle alt+↓', () => {
-    instance.handleKeyDown(mockEvent({ altKey: true, code: KeyboardCodes.DownArrow }));
+    instance.handleKeyDown(mockEvent({ altKey: true, key: KeyboardKeys.DownArrow }));
     expect(instance.setState).toHaveBeenCalledWith(selectNextLocation);
   });
   it('should handle alt+↑', () => {
-    instance.handleKeyDown(mockEvent({ altKey: true, code: KeyboardCodes.UpArrow }));
+    instance.handleKeyDown(mockEvent({ altKey: true, key: KeyboardKeys.UpArrow }));
     expect(instance.setState).toHaveBeenCalledWith(selectPreviousLocation);
   });
   it('should handle alt+←', () => {
-    instance.handleKeyDown(mockEvent({ altKey: true, code: KeyboardCodes.LeftArrow }));
+    instance.handleKeyDown(mockEvent({ altKey: true, key: KeyboardKeys.LeftArrow }));
     expect(instance.setState).toHaveBeenCalledWith(selectPreviousFlow);
   });
   it('should handle alt+→', () => {
-    instance.handleKeyDown(mockEvent({ altKey: true, code: KeyboardCodes.RightArrow }));
+    instance.handleKeyDown(mockEvent({ altKey: true, key: KeyboardKeys.RightArrow }));
     expect(instance.setState).toHaveBeenCalledWith(selectNextFlow);
   });
-  it('should ignore different scopes', () => {
-    key.setScope('notissues');
+  it('should ignore if modal is open', () => {
+    wrapper.setState({ bulkChangeModal: true });
     instance.handleKeyDown(mockEvent({ key: KeyboardKeys.Alt }));
     expect(instance.setState).not.toHaveBeenCalled();
   });
@@ -500,19 +463,9 @@ describe('keyup event handler', () => {
     jest.resetAllMocks();
   });
 
-  afterEach(() => {
-    key.setScope('issues');
-  });
-
   it('should handle alt', () => {
     instance.handleKeyUp(mockEvent({ key: KeyboardKeys.Alt }));
     expect(instance.setState).toHaveBeenCalledWith(disableLocationsNavigator);
-  });
-
-  it('should ignore different scopes', () => {
-    key.setScope('notissues');
-    instance.handleKeyUp(mockEvent({ key: KeyboardKeys.Alt }));
-    expect(instance.setState).not.toHaveBeenCalled();
   });
 });
 
@@ -546,15 +499,23 @@ it('should refresh branch status if issues are updated', async () => {
 });
 
 it('should update the open issue when it is changed', async () => {
+  (searchIssues as jest.Mock).mockImplementation(mockSearchIssuesResponse());
+
   const wrapper = shallowRender();
   await waitAndUpdate(wrapper);
 
-  wrapper.setState({ openIssue: ISSUES[0] });
+  const issue = wrapper.state().issues[0];
 
-  const updatedIssue: Issue = { ...ISSUES[0], type: 'SECURITY_HOTSPOT' };
+  wrapper.setProps({ location: mockLocation({ query: { open: issue.key } }) });
+  await waitAndUpdate(wrapper);
+
+  expect(wrapper.state().openIssue).toEqual(issue);
+
+  const updatedIssue: Issue = { ...issue, type: 'SECURITY_HOTSPOT' };
   wrapper.instance().handleIssueChange(updatedIssue);
 
-  expect(wrapper.state().openIssue).toBe(updatedIssue);
+  await waitAndUpdate(wrapper);
+  expect(wrapper.state().openIssue).toEqual(updatedIssue);
 });
 
 it('should handle createAfter query param with time', async () => {

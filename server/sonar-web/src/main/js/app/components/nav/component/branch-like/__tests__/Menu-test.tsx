@@ -19,9 +19,9 @@
  */
 import { shallow } from 'enzyme';
 import * as React from 'react';
-import { Link } from 'react-router';
+import { Link } from 'react-router-dom';
 import SearchBox from '../../../../../../components/controls/SearchBox';
-import { KeyboardCodes } from '../../../../../../helpers/keycodes';
+import { KeyboardKeys } from '../../../../../../helpers/keycodes';
 import {
   mockPullRequest,
   mockSetOfBranchAndPullRequest
@@ -29,6 +29,7 @@ import {
 import { mockComponent } from '../../../../../../helpers/mocks/component';
 import { mockRouter } from '../../../../../../helpers/testMocks';
 import { click, mockEvent } from '../../../../../../helpers/testUtils';
+import { queryToSearch } from '../../../../../../helpers/urls';
 import { Menu } from '../Menu';
 import { MenuItemList } from '../MenuItemList';
 
@@ -67,10 +68,10 @@ it('should change url and close menu when an element is selected', () => {
   expect(onClose).toHaveBeenCalled();
   expect(push).toHaveBeenCalledWith(
     expect.objectContaining({
-      query: {
+      search: queryToSearch({
         id: component.key,
         pullRequest: pr.key
-      }
+      })
     })
   );
 });
@@ -93,14 +94,14 @@ it('should handle keyboard shortcut correctly', () => {
 
   const { onKeyDown } = wrapper.find(SearchBox).props();
 
-  onKeyDown!(mockEvent({ nativeEvent: { code: KeyboardCodes.UpArrow } }));
-  expect(wrapper.state().selectedBranchLike).toBe(branchLikes[5]);
+  onKeyDown!(mockEvent({ nativeEvent: { key: KeyboardKeys.UpArrow } }));
+  expect(wrapper.state().selectedBranchLike).toBe(branchLikes[3]);
 
-  onKeyDown!(mockEvent({ nativeEvent: { code: KeyboardCodes.DownArrow } }));
-  onKeyDown!(mockEvent({ nativeEvent: { code: KeyboardCodes.DownArrow } }));
+  onKeyDown!(mockEvent({ nativeEvent: { key: KeyboardKeys.DownArrow } }));
+  onKeyDown!(mockEvent({ nativeEvent: { key: KeyboardKeys.DownArrow } }));
   expect(wrapper.state().selectedBranchLike).toBe(branchLikes[0]);
 
-  onKeyDown!(mockEvent({ nativeEvent: { code: KeyboardCodes.Enter } }));
+  onKeyDown!(mockEvent({ nativeEvent: { key: KeyboardKeys.Enter } }));
   expect(push).toHaveBeenCalled();
 });
 

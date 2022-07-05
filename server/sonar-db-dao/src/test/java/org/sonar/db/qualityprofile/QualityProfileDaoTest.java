@@ -38,7 +38,7 @@ import org.sonar.db.DbSession;
 import org.sonar.db.DbTester;
 import org.sonar.db.component.ComponentDto;
 import org.sonar.db.project.ProjectDto;
-import org.sonar.db.rule.RuleDefinitionDto;
+import org.sonar.db.rule.RuleDto;
 
 import static com.google.common.collect.ImmutableList.of;
 import static com.google.common.collect.Lists.newArrayList;
@@ -505,7 +505,7 @@ public class QualityProfileDaoTest {
 
     // a built-in quality profile with active rules
     QProfileDto builtInQPWithActiveRules = db.qualityProfiles().insert(qp -> qp.setIsBuiltIn(true));
-    RuleDefinitionDto ruleDefinitionDto = db.rules().insert();
+    RuleDto ruleDefinitionDto = db.rules().insert();
     db.qualityProfiles().activateRule(builtInQPWithActiveRules, ruleDefinitionDto);
 
     dbSession.commit();
@@ -546,7 +546,7 @@ public class QualityProfileDaoTest {
 
     // a built-in quality profile with active rules
     QProfileDto builtInQPWithActiveRules = db.qualityProfiles().insert(qp -> qp.setIsBuiltIn(true).setLanguage("java"));
-    RuleDefinitionDto ruleDefinitionDto = db.rules().insert();
+    RuleDto ruleDefinitionDto = db.rules().insert();
     db.qualityProfiles().activateRule(builtInQPWithActiveRules, ruleDefinitionDto);
 
     dbSession.commit();
@@ -656,17 +656,61 @@ public class QualityProfileDaoTest {
     QProfileDto jsProfile = db.qualityProfiles().insert(p -> p.setLanguage("js"));
     db.qualityProfiles().associateWithProject(project1, javaProfile, jsProfile);
 
-    assertThat(underTest.selectAssociatedToProjectUuidAndLanguages(dbSession, project1, singletonList("java")))
+    assertThat(underTest.selectAssociatedToProjectAndLanguages(dbSession, project1, singletonList("java")))
       .extracting(QProfileDto::getKee).containsOnly(javaProfile.getKee());
-    assertThat(underTest.selectAssociatedToProjectUuidAndLanguages(dbSession, project1, singletonList("unknown")))
+    assertThat(underTest.selectAssociatedToProjectAndLanguages(dbSession, project1, singletonList("unknown")))
       .isEmpty();
-    assertThat(underTest.selectAssociatedToProjectUuidAndLanguages(dbSession, project1, of("java", "unknown")))
+    assertThat(underTest.selectAssociatedToProjectAndLanguages(dbSession, project1, of("java", "unknown")))
       .extracting(QProfileDto::getKee).containsExactly(javaProfile.getKee());
-    assertThat(underTest.selectAssociatedToProjectUuidAndLanguages(dbSession, project1, of("java", "js")))
+    assertThat(underTest.selectAssociatedToProjectAndLanguages(dbSession, project1, of("java", "js")))
       .extracting(QProfileDto::getKee).containsExactlyInAnyOrder(javaProfile.getKee(), jsProfile.getKee());
-    assertThat(underTest.selectAssociatedToProjectUuidAndLanguages(dbSession, project2, singletonList("java")))
+    assertThat(underTest.selectAssociatedToProjectAndLanguages(dbSession, project2, singletonList("java")))
       .isEmpty();
-    assertThat(underTest.selectAssociatedToProjectUuidAndLanguages(dbSession, project2, Collections.emptyList()))
+    assertThat(underTest.selectAssociatedToProjectAndLanguages(dbSession, project2, Collections.emptyList()))
+      .isEmpty();
+  }
+
+  @Test
+  public void test_selectQProfileUuidsByProjectUuid() {
+    ProjectDto project1 = db.components().insertPublicProjectDto();
+    ProjectDto project2 = db.components().insertPublicProjectDto();
+    ProjectDto project3 = db.components().insertPublicProjectDto();
+    QProfileDto javaProfile = db.qualityProfiles().insert(p -> p.setLanguage("java"));
+    QProfileDto jsProfile = db.qualityProfiles().insert(p -> p.setLanguage("js"));
+    QProfileDto cProfile = db.qualityProfiles().insert(p -> p.setLanguage("c"));
+    db.qualityProfiles().associateWithProject(project1, javaProfile, cProfile);
+    db.qualityProfiles().associateWithProject(project2, jsProfile);
+
+    assertThat(underTest.selectQProfileUuidsByProjectUuid(dbSession, project1.getUuid()))
+      .hasSize(2)
+      .containsExactly(javaProfile.getKee(), cProfile.getKee());
+
+    assertThat(underTest.selectQProfileUuidsByProjectUuid(dbSession, project2.getUuid()))
+      .hasSize(1)
+      .containsExactly(jsProfile.getKee());
+
+    assertThat(underTest.selectQProfileUuidsByProjectUuid(dbSession, project3.getUuid()))
+      .isEmpty();
+  }
+
+  @Test
+  public void test_selectQProfilesByProjectUuid() {
+    ProjectDto project1 = db.components().insertPublicProjectDto();
+    ProjectDto project2 = db.components().insertPublicProjectDto();
+    ProjectDto project3 = db.components().insertPublicProjectDto();
+    QProfileDto javaProfile = db.qualityProfiles().insert(p -> p.setLanguage("java"));
+    QProfileDto jsProfile = db.qualityProfiles().insert(p -> p.setLanguage("js"));
+    QProfileDto cProfile = db.qualityProfiles().insert(p -> p.setLanguage("c"));
+    db.qualityProfiles().associateWithProject(project1, javaProfile, cProfile);
+    db.qualityProfiles().associateWithProject(project2, jsProfile);
+
+    assertThat(underTest.selectQProfilesByProjectUuid(dbSession, project1.getUuid()))
+      .containsExactly(javaProfile, cProfile);
+
+    assertThat(underTest.selectQProfilesByProjectUuid(dbSession, project2.getUuid()))
+      .containsExactly(jsProfile);
+
+    assertThat(underTest.selectQProfilesByProjectUuid(dbSession, project3.getUuid()))
       .isEmpty();
   }
 

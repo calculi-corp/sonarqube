@@ -87,6 +87,29 @@ public class SamlSettingsTest {
   }
 
   @Test
+  public void is_sign_requests_enabled() {
+    settings.setProperty("sonar.auth.saml.signature.enabled", true);
+    assertThat(underTest.isSignRequestsEnabled()).isTrue();
+
+    settings.setProperty("sonar.auth.saml.signature.enabled", false);
+    assertThat(underTest.isSignRequestsEnabled()).isFalse();
+  }
+
+  @Test
+  public void return_service_provider_certificate() {
+    settings.setProperty("sonar.auth.saml.sp.certificate.secured", "my_certificate");
+
+    assertThat(underTest.getServiceProviderCertificate()).isEqualTo("my_certificate");
+  }
+
+  @Test
+  public void return_service_provider_private_key() {
+    settings.setProperty("sonar.auth.saml.sp.privateKey.secured", "my_private_secret_private_key");
+
+    assertThat(underTest.getServiceProviderPrivateKey()).hasValue("my_private_secret_private_key");
+  }
+
+  @Test
   public void return_user_login_attribute() {
     settings.setProperty("sonar.auth.saml.user.login", "userLogin");
 
@@ -190,7 +213,7 @@ public class SamlSettingsTest {
   public void fail_to_get_certificate_when_null() {
     assertThatThrownBy(() -> underTest.getCertificate())
       .isInstanceOf(IllegalArgumentException.class)
-      .hasMessage("Certificate is missing");
+      .hasMessage("Identity provider certificate is missing");
   }
 
   @Test

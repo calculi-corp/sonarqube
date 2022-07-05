@@ -54,6 +54,8 @@ export interface HotspotSnippetContainerRendererProps {
 
 const noop = () => undefined;
 const SCROLL_DELAY = 100;
+const EXPAND_ANIMATION_SPEED = 200;
+
 const TOP_OFFSET = 100; // 5 lines above
 const BOTTOM_OFFSET = 28; // 1 line below + margin
 
@@ -73,6 +75,57 @@ export function getScrollHandler(scrollableRef: React.RefObject<HTMLDivElement>)
       }
     }, SCROLL_DELAY);
   };
+}
+
+/* Exported for testing */
+export async function animateExpansion(
+  scrollableRef: React.RefObject<HTMLDivElement>,
+  expandBlock: (direction: ExpandDirection) => Promise<void>,
+  direction: ExpandDirection
+) {
+  const wrapper = scrollableRef.current?.querySelector<HTMLElement>('.snippet');
+  const table = wrapper?.firstChild as HTMLElement;
+
+  if (!wrapper || !table) {
+    return;
+  }
+
+  // lock the wrapper's height before adding the additional rows
+  const startHeight = table.getBoundingClientRect().height;
+  wrapper.style.maxHeight = `${startHeight}px`;
+
+  await expandBlock(direction);
+
+  const targetHeight = table.getBoundingClientRect().height;
+
+  if (direction === 'up') {
+    /*
+     * Add a negative margin to keep the original alignment
+     * Remove the transition to do so instantaneously
+     */
+    table.style.transition = 'none';
+    table.style.marginTop = `${startHeight - targetHeight}px`;
+
+    setTimeout(() => {
+      /*
+       * Reset the transition to the default
+       * transition the margin back to 0 at the same time as the maxheight
+       */
+      table.style.transition = '';
+      table.style.marginTop = '0px';
+      wrapper.style.maxHeight = `${targetHeight}px`;
+    }, 0);
+  } else {
+    // False positive:
+    // eslint-disable-next-line require-atomic-updates
+    wrapper.style.maxHeight = `${targetHeight}px`;
+  }
+
+  // after the animation is done, clear the applied styles
+  setTimeout(() => {
+    table.style.marginTop = '';
+    wrapper.style.maxHeight = '';
+  }, EXPAND_ANIMATION_SPEED);
 }
 
 export default function HotspotSnippetContainerRenderer(
@@ -129,20 +182,18 @@ export default function HotspotSnippetContainerRenderer(
               component={sourceViewerFile}
               displayLineNumberOptions={false}
               displaySCM={false}
-              expandBlock={(_i, direction) => props.onExpandBlock(direction)}
-              handleCloseIssues={noop}
-              handleOpenIssues={noop}
+              expandBlock={(_i, direction) =>
+                animateExpansion(scrollableRef, props.onExpandBlock, direction)
+              }
               handleSymbolClick={props.onSymbolClick}
               highlightedLocationMessage={highlightedLocation}
               highlightedSymbols={highlightedSymbols}
               index={0}
               issue={hotspot}
-              issuesByLine={{}}
               lastSnippetOfLastGroup={false}
               locations={secondaryLocations}
               locationsByLine={primaryLocations}
               onLocationSelect={props.onLocationSelect}
-              openIssuesByLine={{}}
               renderAdditionalChildInLine={renderHotspotBoxInLine}
               renderDuplicationPopup={noop}
               snippet={sourceLines}

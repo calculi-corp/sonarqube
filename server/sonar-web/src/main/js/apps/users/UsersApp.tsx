@@ -21,8 +21,8 @@ import * as React from 'react';
 import { Helmet } from 'react-helmet-async';
 import { getIdentityProviders, searchUsers } from '../../api/users';
 import withCurrentUserContext from '../../app/components/current-user/withCurrentUserContext';
-import Suggestions from '../../app/components/embed-docs-modal/Suggestions';
 import ListFooter from '../../components/controls/ListFooter';
+import Suggestions from '../../components/embed-docs-modal/Suggestions';
 import { Location, Router, withRouter } from '../../components/hoc/withRouter';
 import { translate } from '../../helpers/l10n';
 import { IdentityProvider, Paging } from '../../types/types';
@@ -34,8 +34,8 @@ import { parseQuery, Query, serializeQuery } from './utils';
 
 interface Props {
   currentUser: { isLoggedIn: boolean; login?: string };
-  location: Pick<Location, 'query'>;
-  router: Pick<Router, 'push'>;
+  location: Location;
+  router: Router;
 }
 
 interface State {

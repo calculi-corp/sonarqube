@@ -38,7 +38,7 @@ import org.sonar.api.issue.Issue;
 import org.sonar.api.utils.System2;
 import org.sonar.db.DbTester;
 import org.sonar.db.component.ComponentDto;
-import org.sonar.db.rule.RuleDefinitionDto;
+import org.sonar.db.rule.RuleDto;
 import org.sonar.db.user.GroupDto;
 import org.sonar.db.user.UserDto;
 import org.sonar.server.es.EsTester;
@@ -228,9 +228,6 @@ public class IssueIndexTest {
 
     userSessionRule.logIn().setGroups(group1, group2);
     assertThatSearchReturnsEmpty(IssueQuery.builder().projectUuids(singletonList(project3.uuid())));
-
-    userSessionRule.setRoot();
-    assertThatSearchReturnsOnly(IssueQuery.builder(), "I1", "I2", "I3");
   }
 
   @Test
@@ -261,24 +258,12 @@ public class IssueIndexTest {
     // another user
     userSessionRule.logIn(newUserDto());
     assertThatSearchReturnsEmpty(IssueQuery.builder());
-
-    userSessionRule.setRoot();
-    assertThatSearchReturnsOnly(IssueQuery.builder(), "I1", "I2", "I3");
-  }
-
-  @Test
-  public void root_user_is_authorized_to_access_all_issues() {
-    ComponentDto project = newPrivateProjectDto();
-    indexIssue(newDoc("I1", project));
-    userSessionRule.logIn().setRoot();
-
-    assertThatSearchReturnsOnly(IssueQuery.builder(), "I1");
   }
 
   @Test
   public void list_tags() {
-    RuleDefinitionDto r1 = db.rules().insert();
-    RuleDefinitionDto r2 = db.rules().insert();
+    RuleDto r1 = db.rules().insert();
+    RuleDto r2 = db.rules().insert();
     ruleIndexer.commitAndIndex(db.getSession(), asList(r1.getUuid(), r2.getUuid()));
     ComponentDto project = newPrivateProjectDto();
     ComponentDto file = newFileDto(project, null);

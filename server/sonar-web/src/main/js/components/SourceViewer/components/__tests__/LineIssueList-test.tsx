@@ -20,10 +20,11 @@
 import { shallow } from 'enzyme';
 import * as React from 'react';
 import { mockBranch } from '../../../../helpers/mocks/branch-like';
-import { mockIssue, mockSourceLine } from '../../../../helpers/testMocks';
+import { mockSourceLine } from '../../../../helpers/mocks/sources';
+import { mockIssue } from '../../../../helpers/testMocks';
 import LineIssuesList, { LineIssuesListProps } from '../LineIssuesList';
 
-it('shoule render issues', () => {
+it('should render issues', () => {
   const wrapper = shallowRender({
     selectedIssue: 'issue',
     issueLocationsByLine: { '1': [{ from: 1, to: 1, line: 1 }] },
@@ -37,6 +38,7 @@ function shallowRender(props: Partial<LineIssuesListProps> = {}) {
   return shallow(
     <LineIssuesList
       selectedIssue=""
+      displayWhyIsThisAnIssue={true}
       onIssueChange={jest.fn()}
       onIssueClick={jest.fn()}
       onIssuePopupToggle={jest.fn()}

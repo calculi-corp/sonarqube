@@ -59,10 +59,11 @@ public class ServerUserSession extends AbstractUserSession {
   private final UserDto userDto;
   private final DbClient dbClient;
   private final Map<String, String> projectUuidByComponentUuid = new HashMap<>();
+  private final Map<String, Set<String>> permissionsByProjectUuid = new HashMap<>();
+
   private Collection<GroupDto> groups;
   private Boolean isSystemAdministrator;
   private Set<GlobalPermission> permissions;
-  private Map<String, Set<String>> permissionsByProjectUuid;
 
   public ServerUserSession(DbClient dbClient, @Nullable UserDto userDto) {
     this.dbClient = dbClient;
@@ -121,11 +122,6 @@ public class ServerUserSession extends AbstractUserSession {
   }
 
   @Override
-  public boolean isRoot() {
-    return userDto != null && userDto.isRoot();
-  }
-
-  @Override
   public Optional<IdentityProvider> getIdentityProvider() {
     return ofNullable(userDto).map(d -> computeIdentity(d).getIdentityProvider());
   }
@@ -164,40 +160,42 @@ public class ServerUserSession extends AbstractUserSession {
 
   @Override
   protected boolean hasProjectUuidPermission(String permission, String projectUuid) {
-    if (permissionsByProjectUuid == null) {
-      permissionsByProjectUuid = new HashMap<>();
-    }
     return hasPermission(permission, projectUuid);
   }
 
   @Override
   protected boolean hasChildProjectsPermission(String permission, String applicationUuid) {
-    if (permissionsByProjectUuid == null) {
-      permissionsByProjectUuid = new HashMap<>();
-    }
-
     Set<String> childProjectUuids = loadChildProjectUuids(applicationUuid);
-
-    return childProjectUuids
-      .stream()
-      .map(uuid -> hasPermission(permission, uuid))
-      .allMatch(Boolean::valueOf);
+    return childProjectUuids.stream()
+      .allMatch(uuid -> hasPermission(permission, uuid));
   }
 
   @Override
   protected boolean hasPortfolioChildProjectsPermission(String permission, String portfolioUuid) {
-    if (permissionsByProjectUuid == null) {
-      permissionsByProjectUuid = new HashMap<>();
-    }
-
     Set<ComponentDto> portfolioHierarchyComponents = resolvePortfolioHierarchyComponents(portfolioUuid);
+    Set<String> branchUuids = findBranchUuids(portfolioHierarchyComponents);
+    Set<String> projectUuids = findProjectUuids(branchUuids);
 
-    Set<String> portfolioHierarchyComponentUuids = portfolioHierarchyComponents.stream().map(ComponentDto::getCopyComponentUuid).collect(Collectors.toSet());
+    return projectUuids.stream()
+      .allMatch(uuid -> hasPermission(permission, uuid));
+  }
 
-    return portfolioHierarchyComponentUuids
-      .stream()
-      .map(uuid -> hasPermission(permission, uuid))
-      .allMatch(Boolean::valueOf);
+  private static Set<String> findBranchUuids(Set<ComponentDto> portfolioHierarchyComponents) {
+    return portfolioHierarchyComponents.stream()
+      .map(ComponentDto::getCopyComponentUuid)
+      .collect(Collectors.toSet());
+  }
+
+  private Set<String> findProjectUuids(Set<String> branchesComponents) {
+    try (DbSession dbSession = dbClient.openSession(false)) {
+      return dbClient.componentDao().selectByUuids(dbSession, branchesComponents).stream()
+        .map(ServerUserSession::getProjectId)
+        .collect(toSet());
+    }
+  }
+
+  private static String getProjectId(ComponentDto branchComponent) {
+    return Optional.ofNullable(branchComponent.getMainBranchProjectUuid()).orElse(branchComponent.uuid());
   }
 
   private boolean hasPermission(String permission, String projectUuid) {
@@ -348,9 +346,6 @@ public class ServerUserSession extends AbstractUserSession {
   }
 
   private boolean loadIsSystemAdministrator() {
-    if (isRoot()) {
-      return true;
-    }
     return hasPermission(GlobalPermission.ADMINISTER);
   }
 }

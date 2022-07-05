@@ -2,6 +2,7 @@
 
 exports[`#ComponentName should render breadcrumb correctly for APP 1`] = `
 <span
+  aria-label="code.parent_folder"
   className="max-width-100 display-inline-block text-ellipsis"
   title="Foo
 
@@ -19,6 +20,7 @@ foo"
 
 exports[`#ComponentName should render breadcrumb correctly for SVW 1`] = `
 <span
+  aria-label="code.parent_folder"
   className="max-width-100 display-inline-block text-ellipsis"
   title="Foo
 
@@ -36,6 +38,7 @@ foo"
 
 exports[`#ComponentName should render breadcrumb correctly for TRK 1`] = `
 <span
+  aria-label="code.parent_folder"
   className="max-width-100 display-inline-block text-ellipsis"
   title="Foo
 
@@ -53,6 +56,7 @@ foo"
 
 exports[`#ComponentName should render breadcrumb correctly for TRK 2`] = `
 <span
+  aria-label="code.parent_folder"
   className="max-width-100 display-inline-block text-ellipsis"
   title="Foo
 
@@ -70,6 +74,7 @@ foo"
 
 exports[`#ComponentName should render breadcrumb correctly for VW 1`] = `
 <span
+  aria-label="code.parent_folder"
   className="max-width-100 display-inline-block text-ellipsis"
   title="Foo
 
@@ -158,15 +163,10 @@ foo:src/index.tsx"
 >
   <Link
     className="link-with-icon"
-    onlyActiveOnIndex={false}
-    style={Object {}}
     to={
       Object {
         "pathname": "/code",
-        "query": Object {
-          "id": "foo",
-          "selected": "foo:src/index.tsx",
-        },
+        "search": "?id=foo&selected=foo%3Asrc%2Findex.tsx",
       }
     }
   >
@@ -232,6 +232,40 @@ foo:src/index.tsx"
 </span>
 `;
 
+exports[`#ComponentName should render correctly for files 6`] = `
+<span
+  className="max-width-100 display-inline-block text-ellipsis"
+  title="src/index.tsx
+
+foo:src/index.tsx"
+>
+  <span>
+    <QualifierIcon
+      qualifier="FIL"
+    />
+     
+    index.tsx
+  </span>
+</span>
+`;
+
+exports[`#ComponentName should render correctly for files 7`] = `
+<span
+  className="max-width-100 display-inline-block text-ellipsis"
+  title="src/index.tsx
+
+foo:src/index.tsx"
+>
+  <span>
+    <QualifierIcon
+      qualifier="FIL"
+    />
+     
+    index.tsx
+  </span>
+</span>
+`;
+
 exports[`#ComponentName should render correctly for refs 1`] = `
 <span
   className="max-width-100 display-inline-block text-ellipsis"
@@ -243,15 +277,10 @@ foo"
 >
   <Link
     className="link-with-icon"
-    onlyActiveOnIndex={false}
-    style={Object {}}
     to={
       Object {
         "pathname": "/dashboard",
-        "query": Object {
-          "branch": undefined,
-          "id": "src/main/ts/app",
-        },
+        "search": "?id=src%2Fmain%2Fts%2Fapp&code_scope=new",
       }
     }
   >
@@ -280,15 +309,10 @@ foo"
   >
     <Link
       className="link-with-icon"
-      onlyActiveOnIndex={false}
-      style={Object {}}
       to={
         Object {
           "pathname": "/dashboard",
-          "query": Object {
-            "branch": "foo",
-            "id": "src/main/ts/app",
-          },
+          "search": "?id=src%2Fmain%2Fts%2Fapp&branch=foo&code_scope=new",
         }
       }
     >
@@ -328,15 +352,10 @@ foo"
   >
     <Link
       className="link-with-icon"
-      onlyActiveOnIndex={false}
-      style={Object {}}
       to={
         Object {
           "pathname": "/dashboard",
-          "query": Object {
-            "branch": undefined,
-            "id": "src/main/ts/app",
-          },
+          "search": "?id=src%2Fmain%2Fts%2Fapp&code_scope=new",
         }
       }
     >

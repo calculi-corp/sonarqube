@@ -19,7 +19,7 @@
  */
 import { sortBy } from 'lodash';
 import * as React from 'react';
-import { Link } from 'react-router';
+import { Link } from 'react-router-dom';
 import { deleteRule, searchRules } from '../../../api/rules';
 import { Button } from '../../../components/controls/buttons';
 import ConfirmButton from '../../../components/controls/ConfirmButton';
@@ -147,9 +147,7 @@ export default class RuleDetailsCustomRules extends React.PureComponent<Props, S
     return (
       <div className="js-rule-custom-rules coding-rule-section">
         <div className="coding-rules-detail-custom-rules-section">
-          <div className="coding-rule-section-separator" />
-
-          <h3 className="coding-rules-detail-title">{translate('coding_rules.custom_rules')}</h3>
+          <h2 className="coding-rules-detail-title">{translate('coding_rules.custom_rules')}</h2>
 
           {this.props.canChange && (
             <CustomRuleButton onDone={this.handleRuleCreate} templateRule={this.props.ruleDetails}>

@@ -19,7 +19,7 @@
  */
 import { filter } from 'lodash';
 import * as React from 'react';
-import { Link } from 'react-router';
+import { Link } from 'react-router-dom';
 import { activateRule, deactivateRule, Profile } from '../../../api/quality-profiles';
 import InstanceMessage from '../../../components/common/InstanceMessage';
 import { Button } from '../../../components/controls/buttons';
@@ -219,16 +219,14 @@ export default class RuleDetailsProfiles extends React.PureComponent<Props> {
     return (
       <div className="js-rule-profiles coding-rule-section">
         <div className="coding-rules-detail-quality-profiles-section">
-          <div className="coding-rule-section-separator" />
-
-          <h3 className="coding-rules-detail-title">
+          <h2 className="coding-rules-detail-title">
             <InstanceMessage message={translate('coding_rules.quality_profiles')} />
-          </h3>
+          </h2>
 
           {canActivate && (
             <ActivationButton
               buttonText={translate('coding_rules.activate')}
-              className="coding-rules-quality-profile-activate spacer-left"
+              className="coding-rules-quality-profile-activate"
               modalHeader={translate('coding_rules.activate_in_quality_profile')}
               onDone={this.handleActivate}
               profiles={filter(

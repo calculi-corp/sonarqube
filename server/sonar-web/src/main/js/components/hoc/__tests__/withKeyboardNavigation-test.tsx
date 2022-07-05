@@ -19,9 +19,9 @@
  */
 import { mount, shallow } from 'enzyme';
 import * as React from 'react';
-import { KeyboardCodes } from '../../../helpers/keycodes';
+import { KeyboardKeys } from '../../../helpers/keycodes';
 import { mockComponent } from '../../../helpers/mocks/component';
-import { KEYCODE_MAP, keydown } from '../../../helpers/testUtils';
+import { keydown } from '../../../helpers/testUtils';
 import { ComponentMeasure } from '../../../types/types';
 import withKeyboardNavigation, { WithKeyboardNavigationProps } from '../withKeyboardNavigation';
 
@@ -41,23 +41,6 @@ const COMPONENTS = [
   mockComponent({ key: 'file-2' }),
   mockComponent({ key: 'file-3' })
 ];
-
-jest.mock('keymaster', () => {
-  const key: any = (bindKey: string, _: string, callback: Function) => {
-    document.addEventListener('keydown', (event: KeyboardEvent) => {
-      const keymasterCode = event.code && KEYCODE_MAP[event.code as KeyboardCodes];
-      if (keymasterCode && bindKey.split(',').includes(keymasterCode)) {
-        return callback();
-      }
-      return true;
-    });
-  };
-
-  key.setScope = jest.fn();
-  key.deleteScope = jest.fn();
-
-  return key;
-});
 
 it('should wrap component correctly', () => {
   const wrapper = shallow(applyProps());
@@ -81,28 +64,32 @@ it('should correctly bind key events for component navigation', () => {
     })
   );
 
-  keydown({ code: KeyboardCodes.DownArrow });
+  keydown({ key: KeyboardKeys.DownArrow });
   expect(onHighlight).toBeCalledWith(COMPONENTS[2]);
   expect(onSelect).not.toBeCalled();
 
-  keydown({ code: KeyboardCodes.UpArrow });
-  keydown({ code: KeyboardCodes.UpArrow });
+  keydown({ key: KeyboardKeys.UpArrow });
+  keydown({ key: KeyboardKeys.UpArrow });
   expect(onHighlight).toBeCalledWith(COMPONENTS[0]);
   expect(onSelect).not.toBeCalled();
 
-  keydown({ code: KeyboardCodes.UpArrow });
+  keydown({ key: KeyboardKeys.UpArrow });
   expect(onHighlight).toBeCalledWith(COMPONENTS[2]);
 
-  keydown({ code: KeyboardCodes.DownArrow });
+  keydown({ key: KeyboardKeys.DownArrow });
   expect(onHighlight).toBeCalledWith(COMPONENTS[0]);
 
-  keydown({ code: KeyboardCodes.RightArrow });
+  keydown({ key: KeyboardKeys.RightArrow, metaKey: true });
+  expect(onSelect).not.toBeCalled();
+  keydown({ key: KeyboardKeys.RightArrow });
   expect(onSelect).toBeCalledWith(COMPONENTS[0]);
 
-  keydown({ code: KeyboardCodes.Enter });
+  keydown({ key: KeyboardKeys.Enter });
   expect(onSelect).toBeCalledWith(COMPONENTS[0]);
 
-  keydown({ code: KeyboardCodes.LeftArrow });
+  keydown({ key: KeyboardKeys.LeftArrow, metaKey: true });
+  expect(onGoToParent).not.toBeCalled();
+  keydown({ key: KeyboardKeys.LeftArrow });
   expect(onGoToParent).toBeCalled();
 });
 
@@ -119,18 +106,18 @@ it('should support not cycling through elements, and triggering a callback on re
     })
   );
 
-  keydown({ code: KeyboardCodes.DownArrow });
+  keydown({ key: KeyboardKeys.DownArrow });
   expect(onHighlight).toBeCalledWith(COMPONENTS[0]);
-  keydown({ code: KeyboardCodes.DownArrow });
-  keydown({ code: KeyboardCodes.DownArrow });
-  keydown({ code: KeyboardCodes.DownArrow });
+  keydown({ key: KeyboardKeys.DownArrow });
+  keydown({ key: KeyboardKeys.DownArrow });
+  keydown({ key: KeyboardKeys.DownArrow });
   expect(onHighlight).toBeCalledWith(COMPONENTS[2]);
   expect(onEndOfList).toBeCalled();
 
-  keydown({ code: KeyboardCodes.UpArrow });
-  keydown({ code: KeyboardCodes.UpArrow });
-  keydown({ code: KeyboardCodes.UpArrow });
-  keydown({ code: KeyboardCodes.UpArrow });
+  keydown({ key: KeyboardKeys.UpArrow });
+  keydown({ key: KeyboardKeys.UpArrow });
+  keydown({ key: KeyboardKeys.UpArrow });
+  keydown({ key: KeyboardKeys.UpArrow });
   expect(onHighlight).toBeCalledWith(COMPONENTS[0]);
 });
 
@@ -151,19 +138,19 @@ it('should correctly bind key events for codeview navigation', () => {
 
   expect(onHighlight).not.toBeCalled();
 
-  keydown({ code: KeyboardCodes.DownArrow });
+  keydown({ key: KeyboardKeys.DownArrow });
   expect(onHighlight).not.toBeCalled();
 
-  keydown({ code: KeyboardCodes.UpArrow });
+  keydown({ key: KeyboardKeys.UpArrow });
   expect(onHighlight).not.toBeCalled();
 
-  keydown({ code: KeyboardCodes.RightArrow });
+  keydown({ key: KeyboardKeys.RightArrow });
   expect(onSelect).not.toBeCalled();
 
-  keydown({ code: KeyboardCodes.Enter });
+  keydown({ key: KeyboardKeys.Enter });
   expect(onSelect).not.toBeCalled();
 
-  keydown({ code: KeyboardCodes.LeftArrow });
+  keydown({ key: KeyboardKeys.LeftArrow });
   expect(onGoToParent).toBeCalled();
 });
 

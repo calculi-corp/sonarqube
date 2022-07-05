@@ -20,21 +20,21 @@
  */
 import styled from '@emotion/styled';
 import classNames from 'classnames';
-import { Location } from 'history';
 import { debounce, intersection } from 'lodash';
 import * as React from 'react';
 import { Helmet } from 'react-helmet-async';
-import { InjectedRouter } from 'react-router';
-import A11ySkipTarget from '../../../app/components/a11y/A11ySkipTarget';
 import withBranchStatusActions from '../../../app/components/branch-status/withBranchStatusActions';
-import Suggestions from '../../../app/components/embed-docs-modal/Suggestions';
+import withComponentContext from '../../../app/components/componentContext/withComponentContext';
 import withMetricsContext from '../../../app/components/metrics/withMetricsContext';
+import A11ySkipTarget from '../../../components/a11y/A11ySkipTarget';
 import HelpTooltip from '../../../components/controls/HelpTooltip';
 import ListFooter from '../../../components/controls/ListFooter';
+import Suggestions from '../../../components/embed-docs-modal/Suggestions';
+import { Location, Router, withRouter } from '../../../components/hoc/withRouter';
 import { Alert } from '../../../components/ui/Alert';
 import { isPullRequest, isSameBranchLike } from '../../../helpers/branch-like';
 import { translate } from '../../../helpers/l10n';
-import { getCodeUrl, getProjectUrl } from '../../../helpers/urls';
+import { CodeScope, getCodeUrl, getProjectUrl } from '../../../helpers/urls';
 import { BranchLike } from '../../../types/branch-like';
 import { isPortfolioLike } from '../../../types/component';
 import { Breadcrumb, Component, ComponentMeasure, Dict, Issue, Metric } from '../../../types/types';
@@ -55,8 +55,8 @@ interface Props {
   branchLike?: BranchLike;
   component: Component;
   fetchBranchStatus: (branchLike: BranchLike, projectKey: string) => Promise<void>;
-  location: Pick<Location, 'query'>;
-  router: Pick<InjectedRouter, 'push'>;
+  location: Location;
+  router: Router;
   metrics: Dict<Metric>;
 }
 
@@ -217,9 +217,12 @@ export class CodeApp extends React.Component<Props, State> {
 
   handleSelect = (component: ComponentMeasure) => {
     const { branchLike, component: rootComponent } = this.props;
+    const { newCodeSelected } = this.state;
 
     if (component.refKey) {
-      this.props.router.push(getProjectUrl(component.refKey, component.branch));
+      const codeType = newCodeSelected ? CodeScope.New : CodeScope.Overall;
+      const url = getProjectUrl(component.refKey, component.branch, codeType);
+      this.props.router.push(url);
     } else {
       this.props.router.push(getCodeUrl(rootComponent.key, branchLike, component.key));
     }
@@ -350,6 +353,7 @@ export class CodeApp extends React.Component<Props, State> {
                   onSelect={this.handleSelect}
                   rootComponent={component}
                   selected={highlighted}
+                  newCodeSelected={newCodeSelected}
                 />
               </div>
               <ListFooter count={components.length} loadMore={this.handleLoadMore} total={total} />
@@ -398,4 +402,6 @@ const AlertContent = styled.div`
   align-items: center;
 `;
 
-export default withBranchStatusActions(withMetricsContext(CodeApp));
+export default withRouter(
+  withComponentContext(withBranchStatusActions(withMetricsContext(CodeApp)))
+);

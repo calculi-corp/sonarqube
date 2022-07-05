@@ -71,7 +71,7 @@ public class CommandFactoryImpl implements CommandFactory {
     SOCKS_PROXY_HOST.getKey(),
     SOCKS_PROXY_PORT.getKey()};
 
-  private static final Version SQ_VERSION = MetadataLoader.loadVersion(org.sonar.api.utils.System2.INSTANCE);
+  private static final Version SQ_VERSION = MetadataLoader.loadSQVersion(org.sonar.api.utils.System2.INSTANCE);
   private final Props props;
   private final File tempDir;
   private final System2 system2;
@@ -126,6 +126,7 @@ public class CommandFactoryImpl implements CommandFactory {
         .add("-Des.path.conf=" + esInstallation.getConfDirectory().getAbsolutePath()))
       .setEnvVariable("ES_JVM_OPTIONS", esInstallation.getJvmOptions().getAbsolutePath())
       .setEnvVariable("ES_JAVA_HOME", System.getProperties().getProperty("java.home"))
+      .setEnvVariable("LIBFFI_TMPDIR", this.tempDir.getAbsolutePath())
       .setClassName("org.elasticsearch.bootstrap.Elasticsearch")
       .addClasspath("lib/*")
       .suppressEnvVariable(ENV_VAR_JAVA_TOOL_OPTIONS)

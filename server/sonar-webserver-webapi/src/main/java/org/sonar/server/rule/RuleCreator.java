@@ -38,10 +38,9 @@ import org.sonar.api.utils.System2;
 import org.sonar.core.util.UuidFactory;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
-import org.sonar.db.rule.RuleDefinitionDto;
+import org.sonar.db.rule.RuleDescriptionSectionDto;
 import org.sonar.db.rule.RuleDto;
 import org.sonar.db.rule.RuleDto.Format;
-import org.sonar.db.rule.RuleMetadataDto;
 import org.sonar.db.rule.RuleParamDto;
 import org.sonar.server.exceptions.BadRequestException;
 import org.sonar.server.rule.index.RuleIndexer;
@@ -50,6 +49,8 @@ import org.sonar.server.util.TypeValidations;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.collect.Lists.newArrayList;
 import static java.lang.String.format;
+import static java.util.Objects.requireNonNull;
+import static org.sonar.db.rule.RuleDescriptionSectionDto.createDefaultRuleDescriptionSection;
 import static org.sonar.server.exceptions.BadRequestException.checkRequest;
 
 @ServerSide
@@ -72,7 +73,6 @@ public class RuleCreator {
 
   public RuleKey create(DbSession dbSession, NewCustomRule newRule) {
     RuleKey templateKey = newRule.templateKey();
-    checkArgument(templateKey != null, "Rule template key should not be null");
     RuleDto templateRule = dbClient.ruleDao().selectByKey(dbSession, templateKey)
       .orElseThrow(() -> new IllegalArgumentException(format(TEMPLATE_KEY_NOT_EXIST_FORMAT, templateKey)));
     checkArgument(templateRule.isTemplate(), "This rule is not a template rule: %s", templateKey.toString());
@@ -80,7 +80,7 @@ public class RuleCreator {
     validateCustomRule(newRule, dbSession, templateKey);
 
     RuleKey customRuleKey = RuleKey.of(templateRule.getRepositoryKey(), newRule.ruleKey());
-    Optional<RuleDefinitionDto> definition = loadRule(dbSession, customRuleKey);
+    Optional<RuleDto> definition = loadRule(dbSession, customRuleKey);
     String customRuleUuid = definition.map(d -> updateExistingRule(d, newRule, dbSession))
       .orElseGet(() -> createCustomRule(customRuleKey, newRule, templateRule, dbSession));
 
@@ -166,7 +166,7 @@ public class RuleCreator {
   }
 
   private static void validateDescription(List<String> errors, NewCustomRule newRule) {
-    if (Strings.isNullOrEmpty(newRule.htmlDescription()) && Strings.isNullOrEmpty(newRule.markdownDescription())) {
+    if (Strings.isNullOrEmpty(newRule.markdownDescription())) {
       errors.add("The description is missing");
     }
   }
@@ -177,20 +177,19 @@ public class RuleCreator {
     }
   }
 
-  private Optional<RuleDefinitionDto> loadRule(DbSession dbSession, RuleKey ruleKey) {
-    return dbClient.ruleDao().selectDefinitionByKey(dbSession, ruleKey);
+  private Optional<RuleDto> loadRule(DbSession dbSession, RuleKey ruleKey) {
+    return dbClient.ruleDao().selectByKey(dbSession, ruleKey);
   }
 
   private String createCustomRule(RuleKey ruleKey, NewCustomRule newRule, RuleDto templateRuleDto, DbSession dbSession) {
-    RuleDefinitionDto ruleDefinition = new RuleDefinitionDto()
+    RuleDescriptionSectionDto ruleDescriptionSectionDto = createDefaultRuleDescriptionSection(uuidFactory.create(), requireNonNull(newRule.markdownDescription()));
+    RuleDto ruleDto = new RuleDto()
       .setUuid(uuidFactory.create())
       .setRuleKey(ruleKey)
       .setPluginKey(templateRuleDto.getPluginKey())
       .setTemplateUuid(templateRuleDto.getUuid())
       .setConfigKey(templateRuleDto.getConfigKey())
       .setName(newRule.name())
-      .setDescription(newRule.markdownDescription())
-      .setDescriptionFormat(Format.MARKDOWN)
       .setSeverity(newRule.severity())
       .setStatus(newRule.status())
       .setType(newRule.type() == null ? templateRuleDto.getType() : newRule.type().getDbConstant())
@@ -205,27 +204,24 @@ public class RuleCreator {
       .setIsExternal(false)
       .setIsAdHoc(false)
       .setCreatedAt(system2.now())
-      .setUpdatedAt(system2.now());
-    dbClient.ruleDao().insert(dbSession, ruleDefinition);
+      .setUpdatedAt(system2.now())
+      .setDescriptionFormat(Format.MARKDOWN)
+      .addRuleDescriptionSectionDto(ruleDescriptionSectionDto);
 
     Set<String> tags = templateRuleDto.getTags();
     if (!tags.isEmpty()) {
-      RuleMetadataDto ruleMetadata = new RuleMetadataDto()
-        .setRuleUuid(ruleDefinition.getUuid())
-        .setTags(tags)
-        .setCreatedAt(system2.now())
-        .setUpdatedAt(system2.now());
-      dbClient.ruleDao().insertOrUpdate(dbSession, ruleMetadata);
+      ruleDto.setTags(tags);
     }
+    dbClient.ruleDao().insert(dbSession, ruleDto);
 
     for (RuleParamDto templateRuleParamDto : dbClient.ruleDao().selectRuleParamsByRuleKey(dbSession, templateRuleDto.getKey())) {
       String customRuleParamValue = Strings.emptyToNull(newRule.parameter(templateRuleParamDto.getName()));
-      createCustomRuleParams(customRuleParamValue, ruleDefinition, templateRuleParamDto, dbSession);
+      createCustomRuleParams(customRuleParamValue, ruleDto, templateRuleParamDto, dbSession);
     }
-    return ruleDefinition.getUuid();
+    return ruleDto.getUuid();
   }
 
-  private void createCustomRuleParams(@Nullable String paramValue, RuleDefinitionDto ruleDto, RuleParamDto templateRuleParam, DbSession dbSession) {
+  private void createCustomRuleParams(@Nullable String paramValue, RuleDto ruleDto, RuleParamDto templateRuleParam, DbSession dbSession) {
     RuleParamDto ruleParamDto = RuleParamDto.createFor(ruleDto)
       .setName(templateRuleParam.getName())
       .setType(templateRuleParam.getType())
@@ -234,7 +230,7 @@ public class RuleCreator {
     dbClient.ruleDao().insertRuleParam(dbSession, ruleDto, ruleParamDto);
   }
 
-  private String updateExistingRule(RuleDefinitionDto ruleDto, NewCustomRule newRule, DbSession dbSession) {
+  private String updateExistingRule(RuleDto ruleDto, NewCustomRule newRule, DbSession dbSession) {
     if (ruleDto.getStatus().equals(RuleStatus.REMOVED)) {
       if (newRule.isPreventReactivation()) {
         throw new ReactivationException(format("A removed rule with the key '%s' already exists", ruleDto.getKey().rule()), ruleDto.getKey());

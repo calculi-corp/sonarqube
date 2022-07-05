@@ -19,18 +19,27 @@
  */
 package org.sonar.db.qualitygate;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
+import java.util.List;
+import java.util.stream.Collectors;
 import org.junit.Rule;
 import org.junit.Test;
+import org.sonar.api.measures.Metric;
 import org.sonar.api.utils.System2;
 import org.sonar.core.util.Uuids;
 import org.sonar.db.DbSession;
 import org.sonar.db.DbTester;
+import org.sonar.db.component.BranchDto;
+import org.sonar.db.component.BranchType;
+import org.sonar.db.metric.MetricDto;
 import org.sonar.db.project.ProjectDto;
 
 import static java.util.Arrays.asList;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.sonar.db.qualitygate.QualityGateFindingDto.PERCENT_VALUE_TYPE;
+import static org.sonar.db.qualitygate.QualityGateFindingDto.RATING_VALUE_TYPE;
 
 public class QualityGateDaoTest {
 
@@ -117,6 +126,42 @@ public class QualityGateDaoTest {
   }
 
   @Test
+  public void selectQualityGateFindings_returns_all_quality_gate_details_for_project() {
+    ProjectDto project = db.components().insertPublicProjectDto();
+    BranchDto branch = db.components().insertProjectBranch(project).setBranchType(BranchType.BRANCH);
+    QualityGateDto gate = db.qualityGates().insertQualityGate();
+    db.qualityGates().setDefaultQualityGate(gate);
+
+    MetricDto metric1 = db.measures().insertMetric(m -> m.setValueType(Metric.ValueType.PERCENT.name()).setShortName("metric 1"));
+    QualityGateConditionDto condition1 = db.qualityGates().addCondition(gate, metric1, c -> c.setErrorThreshold("13"));
+
+    MetricDto metric2 = db.measures().insertMetric(m -> m.setValueType(Metric.ValueType.RATING.name()).setShortName("metric 2"));
+    QualityGateConditionDto condition2 = db.qualityGates().addCondition(gate, metric2, c -> c.setErrorThreshold("1"));
+
+    MetricDto metric3 = db.measures().insertMetric(m -> m.setValueType(Metric.ValueType.INT.name()).setShortName("metric 3"));
+    QualityGateConditionDto condition3 = db.qualityGates().addCondition(gate, metric3, c -> c.setErrorThreshold("0"));
+
+    db.qualityGates().associateProjectToQualityGate(project, gate);
+    db.commit();
+
+    List<QualityGateFindingDto> findings = new ArrayList<>();
+    underTest.selectQualityGateFindings(db.getSession(), gate.getUuid(), result -> findings.add(result.getResultObject()));
+
+    // check fields
+    assertThat(findings).hasSize(3);
+    assertThat(findings.stream().map(QualityGateFindingDto::getDescription).collect(Collectors.toSet())).containsExactlyInAnyOrder(metric1.getShortName(), metric2.getShortName(), metric3.getShortName());
+
+    QualityGateFindingDto finding1 = findings.stream().filter(f -> f.getDescription().equals(metric1.getShortName())).findFirst().get();
+    validateQualityGateFindingFields(finding1, metric1, condition1);
+
+    QualityGateFindingDto finding2 = findings.stream().filter(f -> f.getDescription().equals(metric2.getShortName())).findFirst().get();
+    validateQualityGateFindingFields(finding2, metric2, condition2);
+
+    QualityGateFindingDto finding3 = findings.stream().filter(f -> f.getDescription().equals(metric3.getShortName())).findFirst().get();
+    validateQualityGateFindingFields(finding3, metric3, condition3);
+  }
+
+  @Test
   public void delete() {
     QualityGateDto qualityGate = qualityGateDbTester.insertQualityGate();
     QualityGateDto otherQualityGate = qualityGateDbTester.insertQualityGate();
@@ -193,5 +238,31 @@ public class QualityGateDaoTest {
     qualityGateDbTester.insertQualityGate(g -> g.setName("Very strict").setBuiltIn(false));
     qualityGateDbTester.insertQualityGate(g -> g.setName("Balanced").setBuiltIn(false));
     qualityGateDbTester.insertQualityGate(g -> g.setName("Lenient").setBuiltIn(false));
+  }
+
+  private String getOperatorDescription(String operator, String valueType) {
+    if (RATING_VALUE_TYPE.equals(valueType)) {
+      return QualityGateFindingDto.RatingType.valueOf(operator).getDescription();
+    }
+
+    return QualityGateFindingDto.PercentageType.valueOf(operator).getDescription();
+  }
+
+  private String getErrorThreshold(String errorThreshold, String valueType) {
+    if (RATING_VALUE_TYPE.equals(valueType)) {
+      return QualityGateFindingDto.RatingValue.valueOf(Integer.parseInt(errorThreshold));
+    }
+
+    if (PERCENT_VALUE_TYPE.equals(valueType)) {
+      return errorThreshold + "%";
+    }
+
+    return errorThreshold;
+  }
+
+  private void validateQualityGateFindingFields(QualityGateFindingDto finding, MetricDto metric, QualityGateConditionDto condition) {
+    assertThat(finding.getDescription()).isEqualTo(metric.getShortName());
+    assertThat(finding.getOperatorDescription()).isEqualTo(getOperatorDescription(condition.getOperator(), metric.getValueType()));
+    assertThat(finding.getErrorThreshold()).isEqualTo(getErrorThreshold(condition.getErrorThreshold(), metric.getValueType()));
   }
 }

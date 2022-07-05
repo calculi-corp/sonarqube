@@ -35,7 +35,7 @@ import org.sonar.db.component.ComponentDto;
 import org.sonar.db.issue.IssueChangeDto;
 import org.sonar.db.issue.IssueDbTester;
 import org.sonar.db.issue.IssueDto;
-import org.sonar.db.rule.RuleDefinitionDto;
+import org.sonar.db.rule.RuleDto;
 import org.sonar.db.user.UserDto;
 import org.sonar.server.es.EsTester;
 import org.sonar.server.exceptions.ForbiddenException;
@@ -50,6 +50,7 @@ import org.sonar.server.issue.index.IssueIteratorFactory;
 import org.sonar.server.issue.notification.IssuesChangesNotificationSerializer;
 import org.sonar.server.notification.NotificationManager;
 import org.sonar.server.rule.DefaultRuleFinder;
+import org.sonar.server.rule.RuleDescriptionFormatter;
 import org.sonar.server.tester.UserSessionRule;
 import org.sonar.server.ws.TestRequest;
 import org.sonar.server.ws.TestResponse;
@@ -89,7 +90,7 @@ public class AddCommentActionTest {
   private IssueDbTester issueDbTester = new IssueDbTester(dbTester);
 
   private IssueIndexer issueIndexer = new IssueIndexer(es.client(), dbClient, new IssueIteratorFactory(dbClient), null);
-  private WebIssueStorage serverIssueStorage = new WebIssueStorage(system2, dbClient, new DefaultRuleFinder(dbClient), issueIndexer,
+  private WebIssueStorage serverIssueStorage = new WebIssueStorage(system2, dbClient, new DefaultRuleFinder(dbClient, mock(RuleDescriptionFormatter.class)), issueIndexer,
     new SequenceUuidFactory());
   private TestIssueChangePostProcessor issueChangePostProcessor = new TestIssueChangePostProcessor();
   private IssueUpdater issueUpdater = new IssueUpdater(dbClient, serverIssueStorage, mock(NotificationManager.class), issueChangePostProcessor,
@@ -205,7 +206,7 @@ public class AddCommentActionTest {
       .extracting(IssueDto::getKey)
       .containsOnly(issue.getKey());
     assertThat(preloadedSearchResponseData.getRules())
-      .extracting(RuleDefinitionDto::getKey)
+      .extracting(RuleDto::getKey)
       .containsOnly(issue.getRuleKey());
     assertThat(preloadedSearchResponseData.getComponents())
       .extracting(ComponentDto::uuid)

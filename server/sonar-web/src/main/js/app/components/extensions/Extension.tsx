@@ -22,15 +22,15 @@ import { Helmet } from 'react-helmet-async';
 import { injectIntl, WrappedComponentProps } from 'react-intl';
 import { Location, Router, withRouter } from '../../../components/hoc/withRouter';
 import { getExtensionStart } from '../../../helpers/extensions';
+import { addGlobalErrorMessage } from '../../../helpers/globalMessages';
 import { translate } from '../../../helpers/l10n';
 import { getCurrentL10nBundle } from '../../../helpers/l10nBundle';
 import { getBaseUrl } from '../../../helpers/system';
 import { AppState } from '../../../types/appstate';
 import { ExtensionStartMethod } from '../../../types/extension';
 import { Dict, Extension as TypeExtension } from '../../../types/types';
-import { CurrentUser } from '../../../types/users';
+import { CurrentUser, HomePage } from '../../../types/users';
 import * as theme from '../../theme';
-import { addGlobalErrorMessage } from '../../utils/globalMessagesService';
 import withAppStateContext from '../app-state/withAppStateContext';
 import withCurrentUserContext from '../current-user/withCurrentUserContext';
 
@@ -41,6 +41,7 @@ interface Props extends WrappedComponentProps {
   location: Location;
   options?: Dict<any>;
   router: Router;
+  updateCurrentUserHomepage: (homepage: HomePage) => void;
 }
 
 interface State {
@@ -80,6 +81,9 @@ export class Extension extends React.PureComponent<Props, State> {
       theme,
       baseUrl: getBaseUrl(),
       l10nBundle: getCurrentL10nBundle(),
+      // See SONAR-16207 and core-extension-governance/src/main/js/portfolios/components/Header.tsx
+      // for more information on why we're passing this as a prop to an extension.
+      updateCurrentUserHomepage: this.props.updateCurrentUserHomepage,
       ...this.props.options
     });
 

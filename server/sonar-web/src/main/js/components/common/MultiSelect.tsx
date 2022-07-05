@@ -21,7 +21,8 @@ import classNames from 'classnames';
 import { difference } from 'lodash';
 import * as React from 'react';
 import SearchBox from '../../components/controls/SearchBox';
-import { KeyboardCodes } from '../../helpers/keycodes';
+import { isShortcut } from '../../helpers/keyboardEventHelpers';
+import { KeyboardKeys } from '../../helpers/keycodes';
 import { translateWithParameters } from '../../helpers/l10n';
 import MultiSelectOption from './MultiSelectOption';
 
@@ -139,22 +140,25 @@ export default class MultiSelect extends React.PureComponent<PropsWithDefault, S
   };
 
   handleKeyboard = (event: KeyboardEvent) => {
-    switch (event.code) {
-      case KeyboardCodes.DownArrow:
+    if (isShortcut(event)) {
+      return true;
+    }
+    switch (event.key) {
+      case KeyboardKeys.DownArrow:
         event.stopPropagation();
         event.preventDefault();
         this.setState(this.selectNextElement);
         break;
-      case KeyboardCodes.UpArrow:
+      case KeyboardKeys.UpArrow:
         event.stopPropagation();
         event.preventDefault();
         this.setState(this.selectPreviousElement);
         break;
-      case KeyboardCodes.LeftArrow:
-      case KeyboardCodes.RightArrow:
+      case KeyboardKeys.LeftArrow:
+      case KeyboardKeys.RightArrow:
         event.stopPropagation();
         break;
-      case KeyboardCodes.Enter:
+      case KeyboardKeys.Enter:
         if (this.state.activeIdx >= 0) {
           this.toggleSelect(this.getAllElements(this.props, this.state)[this.state.activeIdx]);
         }

@@ -27,5 +27,4 @@ public interface ScannerWsClient {
 
   String baseUrl();
 
-
 }

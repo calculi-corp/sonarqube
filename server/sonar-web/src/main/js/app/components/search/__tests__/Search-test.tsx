@@ -19,29 +19,26 @@
  */
 import { shallow, ShallowWrapper } from 'enzyme';
 import * as React from 'react';
-import { KeyboardCodes } from '../../../../helpers/keycodes';
+import { KeyboardKeys } from '../../../../helpers/keycodes';
 import { mockRouter } from '../../../../helpers/testMocks';
-import { elementKeydown } from '../../../../helpers/testUtils';
+import { elementKeydown, keydown } from '../../../../helpers/testUtils';
+import { queryToSearch } from '../../../../helpers/urls';
 import { ComponentQualifier } from '../../../../types/component';
 import { Search } from '../Search';
 
 it('selects results', () => {
   const form = shallowRender();
   form.setState({
-    more: { TRK: 15, BRC: 0 },
+    more: { TRK: 15 },
     open: true,
     results: {
-      TRK: [component('foo'), component('bar')],
-      BRC: [component('qwe', ComponentQualifier.SubProject)]
+      TRK: [component('foo'), component('bar')]
     },
     selected: 'foo'
   });
   expect(form.state().selected).toBe('foo');
   next(form, 'bar');
   next(form, 'qualifier###TRK');
-  next(form, 'qwe');
-  next(form, 'qwe');
-  prev(form, 'qualifier###TRK');
   prev(form, 'bar');
   select(form, 'foo');
   prev(form, 'foo');
@@ -57,8 +54,11 @@ it('opens selected project on enter', () => {
     selected: selectedKey
   });
 
-  elementKeydown(form.find('SearchBox'), KeyboardCodes.Enter);
-  expect(router.push).toBeCalledWith({ pathname: '/dashboard', query: { id: selectedKey } });
+  elementKeydown(form.find('SearchBox'), KeyboardKeys.Enter);
+  expect(router.push).toBeCalledWith({
+    pathname: '/dashboard',
+    search: queryToSearch({ id: selectedKey })
+  });
 });
 
 it('opens selected portfolio on enter', () => {
@@ -73,8 +73,11 @@ it('opens selected portfolio on enter', () => {
     selected: selectedKey
   });
 
-  elementKeydown(form.find('SearchBox'), KeyboardCodes.Enter);
-  expect(router.push).toBeCalledWith({ pathname: '/portfolio', query: { id: selectedKey } });
+  elementKeydown(form.find('SearchBox'), KeyboardKeys.Enter);
+  expect(router.push).toBeCalledWith({
+    pathname: '/portfolio',
+    search: queryToSearch({ id: selectedKey })
+  });
 });
 
 it('opens selected subportfolio on enter', () => {
@@ -89,8 +92,11 @@ it('opens selected subportfolio on enter', () => {
     selected: selectedKey
   });
 
-  elementKeydown(form.find('SearchBox'), KeyboardCodes.Enter);
-  expect(router.push).toBeCalledWith({ pathname: '/portfolio', query: { id: selectedKey } });
+  elementKeydown(form.find('SearchBox'), KeyboardKeys.Enter);
+  expect(router.push).toBeCalledWith({
+    pathname: '/portfolio',
+    search: queryToSearch({ id: selectedKey })
+  });
 });
 
 it('shows warning about short input', () => {
@@ -99,6 +105,17 @@ it('shows warning about short input', () => {
   expect(form.find('.navbar-search-input-hint')).toMatchSnapshot();
   form.setState({ query: 'foobar x' });
   expect(form.find('.navbar-search-input-hint')).toMatchSnapshot();
+});
+
+it('should open the results when pressing key S and close it when pressing Escape', () => {
+  const router = mockRouter();
+  const form = shallowRender({ router });
+  keydown({ key: KeyboardKeys.KeyS, ctrlKey: true });
+  expect(form.state().open).toBe(false);
+  keydown({ key: KeyboardKeys.KeyS });
+  expect(form.state().open).toBe(true);
+  elementKeydown(form.find('SearchBox'), KeyboardKeys.Escape);
+  expect(form.state().open).toBe(false);
 });
 
 function shallowRender(props: Partial<Search['props']> = {}) {
@@ -113,12 +130,12 @@ function component(key: string, qualifier = ComponentQualifier.Project) {
 }
 
 function next(form: ShallowWrapper<Search['props'], Search['state']>, expected: string) {
-  elementKeydown(form.find('SearchBox'), KeyboardCodes.DownArrow);
+  elementKeydown(form.find('SearchBox'), KeyboardKeys.DownArrow);
   expect(form.state().selected).toBe(expected);
 }
 
 function prev(form: ShallowWrapper<Search['props'], Search['state']>, expected: string) {
-  elementKeydown(form.find('SearchBox'), KeyboardCodes.UpArrow);
+  elementKeydown(form.find('SearchBox'), KeyboardKeys.UpArrow);
   expect(form.state().selected).toBe(expected);
 }
 

@@ -29,12 +29,12 @@ import org.sonar.api.utils.System2;
 import org.sonar.core.util.SequenceUuidFactory;
 import org.sonar.core.util.UuidFactory;
 import org.sonar.db.DbTester;
-import org.sonar.db.rule.RuleDefinitionDto;
 import org.sonar.db.rule.RuleDto;
 import org.sonar.server.es.EsTester;
 import org.sonar.server.exceptions.ForbiddenException;
 import org.sonar.server.exceptions.UnauthorizedException;
 import org.sonar.server.rule.RuleCreator;
+import org.sonar.server.rule.RuleDescriptionFormatter;
 import org.sonar.server.rule.index.RuleIndexer;
 import org.sonar.server.tester.UserSessionRule;
 import org.sonar.server.text.MacroInterpreter;
@@ -51,6 +51,7 @@ import static org.mockito.Mockito.mock;
 import static org.sonar.api.rules.RuleType.BUG;
 import static org.sonar.api.rules.RuleType.CODE_SMELL;
 import static org.sonar.db.permission.GlobalPermission.ADMINISTER_QUALITY_PROFILES;
+import static org.sonar.db.rule.RuleDescriptionSectionDto.createDefaultRuleDescriptionSection;
 import static org.sonar.db.rule.RuleTesting.newCustomRule;
 import static org.sonar.db.rule.RuleTesting.newTemplateRule;
 import static org.sonar.server.util.TypeValidationsTesting.newFullTypeValidations;
@@ -58,8 +59,7 @@ import static org.sonar.test.JsonAssert.assertJson;
 
 public class CreateActionTest {
 
-  private System2 system2 = mock(System2.class);
-
+  private final System2 system2 = mock(System2.class);
 
   @Rule
   public UserSessionRule userSession = UserSessionRule.standalone();
@@ -70,11 +70,11 @@ public class CreateActionTest {
   @Rule
   public EsTester es = EsTester.create();
 
-  private UuidFactory uuidFactory = new SequenceUuidFactory();
+  private final UuidFactory uuidFactory = new SequenceUuidFactory();
 
-  private WsActionTester ws = new WsActionTester(new CreateAction(db.getDbClient(),
+  private final WsActionTester ws = new WsActionTester(new CreateAction(db.getDbClient(),
     new RuleCreator(system2, new RuleIndexer(es.client(), db.getDbClient()), db.getDbClient(), newFullTypeValidations(), uuidFactory),
-    new RuleMapper(new Languages(), createMacroInterpreter()),
+    new RuleMapper(new Languages(), createMacroInterpreter(), new RuleDescriptionFormatter()),
     new RuleWsSupport(db.getDbClient(), userSession)));
 
   @Test
@@ -90,9 +90,8 @@ public class CreateActionTest {
     logInAsQProfileAdministrator();
     // Template rule
     RuleDto templateRule = newTemplateRule(RuleKey.of("java", "S001")).setType(CODE_SMELL);
-    db.rules().insert(templateRule.getDefinition());
-    db.rules().insertOrUpdateMetadata(templateRule.getMetadata().setRuleUuid(templateRule.getUuid()));
-    db.rules().insertRuleParam(templateRule.getDefinition(), param -> param.setName("regex").setType("STRING").setDescription("Reg ex").setDefaultValue(".*"));
+    db.rules().insert(templateRule);
+    db.rules().insertRuleParam(templateRule, param -> param.setName("regex").setType("STRING").setDescription("Reg ex").setDefaultValue(".*"));
 
     String result = ws.newRequest()
       .setParam("custom_key", "MY_CUSTOM")
@@ -134,14 +133,13 @@ public class CreateActionTest {
   @Test
   public void create_custom_rule_with_prevent_reactivation_param_to_true() {
     logInAsQProfileAdministrator();
-    RuleDefinitionDto templateRule = newTemplateRule(RuleKey.of("java", "S001")).getDefinition();
+    RuleDto templateRule = newTemplateRule(RuleKey.of("java", "S001"));
     db.rules().insert(templateRule);
     // insert a removed rule
-    RuleDefinitionDto customRule = newCustomRule(templateRule)
+    RuleDto customRule = newCustomRule(templateRule, "Description")
       .setRuleKey("MY_CUSTOM")
       .setStatus(RuleStatus.REMOVED)
       .setName("My custom rule")
-      .setDescription("Description")
       .setDescriptionFormat(RuleDto.Format.MARKDOWN)
       .setSeverity(Severity.MAJOR);
     db.rules().insert(customRule);
@@ -190,7 +188,7 @@ public class CreateActionTest {
   public void create_custom_rule_of_removed_template_should_fail() {
     logInAsQProfileAdministrator();
 
-    RuleDefinitionDto templateRule = db.rules().insert(r -> r.setIsTemplate(true).setStatus(RuleStatus.REMOVED));
+    RuleDto templateRule = db.rules().insert(r -> r.setIsTemplate(true).setStatus(RuleStatus.REMOVED));
 
     TestRequest request = ws.newRequest()
       .setParam("custom_key", "MY_CUSTOM")

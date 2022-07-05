@@ -19,7 +19,7 @@
  */
 import * as React from 'react';
 import { FormattedMessage } from 'react-intl';
-import { Link } from 'react-router';
+import { Link } from 'react-router-dom';
 import { Button } from '../../../components/controls/buttons';
 import SearchBox from '../../../components/controls/SearchBox';
 import { Alert } from '../../../components/ui/Alert';
@@ -30,7 +30,7 @@ import { getGlobalSettingsUrl } from '../../../helpers/urls';
 import { AzureProject, AzureRepository } from '../../../types/alm-integration';
 import { AlmKeys, AlmSettingsInstance } from '../../../types/alm-settings';
 import { Dict } from '../../../types/types';
-import { ALM_INTEGRATION } from '../../settings/components/AdditionalCategoryKeys';
+import { ALM_INTEGRATION_CATEGORY } from '../../settings/constants';
 import AzurePersonalAccessTokenForm from './AzurePersonalAccessTokenForm';
 import AzureProjectsList from './AzureProjectsList';
 import CreateProjectPageHeader from './CreateProjectPageHeader';
@@ -121,7 +121,7 @@ export default function AzureProjectCreateRenderer(props: AzureProjectCreateRend
               values={{
                 alm: translate('onboarding.alm', AlmKeys.Azure),
                 url: (
-                  <Link to={getGlobalSettingsUrl(ALM_INTEGRATION)}>
+                  <Link to={getGlobalSettingsUrl(ALM_INTEGRATION_CATEGORY)}>
                     {translate('settings.page')}
                   </Link>
                 )

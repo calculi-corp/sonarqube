@@ -71,7 +71,7 @@ message Rule {
   optional string repo = 2;
   optional string name = 3;
   optional string createdAt = 4;
-  optional string htmlDesc = 5;
+  optional string htmlDesc = 5 [deprecated=true];
   optional string htmlNote = 6;
   optional string mdDesc = 7;
   optional string mdNote = 8;
@@ -122,6 +122,21 @@ message Rule {
   optional sonarqube.ws.commons.RuleScope scope = 46;
   optional bool isExternal = 47;
   optional DeprecatedKeys deprecatedKeys = 48;
+  optional DescriptionSections descriptionSections = 49;
+
+  message DescriptionSections {
+    repeated DescriptionSection descriptionSections = 1;
+  }
+
+  message DescriptionSection {
+    required string key = 1;
+    required string content = 2;
+    optional Context context = 3;
+
+    message Context {
+      required string displayName = 1;
+    }
+  }
 
   message Params {
     repeated Param params = 1;

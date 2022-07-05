@@ -40,6 +40,7 @@ import org.sonar.api.rules.RuleType;
 import org.sonar.api.server.ws.WebService;
 import org.sonar.api.utils.Durations;
 import org.sonar.api.utils.System2;
+import org.sonar.core.util.UuidFactoryFast;
 import org.sonar.core.util.Uuids;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
@@ -53,9 +54,7 @@ import org.sonar.db.issue.IssueDto;
 import org.sonar.db.permission.GroupPermissionDto;
 import org.sonar.db.protobuf.DbCommons;
 import org.sonar.db.protobuf.DbIssues;
-import org.sonar.db.rule.RuleDefinitionDto;
 import org.sonar.db.rule.RuleDto;
-import org.sonar.db.rule.RuleMetadataDto;
 import org.sonar.db.rule.RuleTesting;
 import org.sonar.db.user.UserDto;
 import org.sonar.server.es.EsTester;
@@ -89,6 +88,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.groups.Tuple.tuple;
 import static org.sonar.api.issue.Issue.RESOLUTION_FIXED;
+import static org.sonar.api.issue.Issue.STATUS_OPEN;
 import static org.sonar.api.issue.Issue.STATUS_RESOLVED;
 import static org.sonar.api.resources.Qualifiers.UNIT_TEST_FILE;
 import static org.sonar.api.rules.RuleType.CODE_SMELL;
@@ -100,11 +100,18 @@ import static org.sonar.api.web.UserRole.ISSUE_ADMIN;
 import static org.sonar.db.component.ComponentDto.PULL_REQUEST_SEPARATOR;
 import static org.sonar.db.component.ComponentTesting.newFileDto;
 import static org.sonar.db.issue.IssueTesting.newDto;
+import static org.sonar.db.rule.RuleDescriptionSectionDto.createDefaultRuleDescriptionSection;
+import static org.sonar.db.rule.RuleTesting.XOO_X1;
+import static org.sonar.db.rule.RuleTesting.XOO_X2;
+import static org.sonar.db.rule.RuleTesting.newRule;
+import static org.sonar.server.issue.CommentAction.COMMENT_KEY;
 import static org.sonar.server.tester.UserSessionRule.standalone;
 import static org.sonarqube.ws.Common.RuleType.BUG;
 import static org.sonarqube.ws.Common.RuleType.SECURITY_HOTSPOT_VALUE;
 import static org.sonarqube.ws.Common.RuleType.VULNERABILITY;
 import static org.sonarqube.ws.client.component.ComponentsWsParameters.PARAM_BRANCH;
+import static org.sonarqube.ws.client.issue.IssuesWsParameters.ACTION_ASSIGN;
+import static org.sonarqube.ws.client.issue.IssuesWsParameters.ACTION_SET_TAGS;
 import static org.sonarqube.ws.client.issue.IssuesWsParameters.PARAM_ADDITIONAL_FIELDS;
 import static org.sonarqube.ws.client.issue.IssuesWsParameters.PARAM_ASSIGNEES;
 import static org.sonarqube.ws.client.issue.IssuesWsParameters.PARAM_COMPONENT_KEYS;
@@ -114,9 +121,11 @@ import static org.sonarqube.ws.client.issue.IssuesWsParameters.PARAM_IN_NEW_CODE
 import static org.sonarqube.ws.client.issue.IssuesWsParameters.PARAM_PULL_REQUEST;
 import static org.sonarqube.ws.client.issue.IssuesWsParameters.PARAM_RULES;
 import static org.sonarqube.ws.client.issue.IssuesWsParameters.PARAM_SINCE_LEAK_PERIOD;
+import static org.sonarqube.ws.client.issue.IssuesWsParameters.PARAM_STATUSES;
 
 public class SearchActionTest {
 
+  private final UuidFactoryFast uuidFactory = UuidFactoryFast.getInstance();
   @Rule
   public UserSessionRule userSession = standalone();
   @Rule
@@ -152,7 +161,7 @@ public class SearchActionTest {
     ComponentDto project = db.components().insertPublicProject();
     ComponentDto file = db.components().insertComponent(newFileDto(project));
     UserDto simon = db.users().insertUser();
-    RuleDefinitionDto rule = newIssueRule().getDefinition();
+    RuleDto rule = newIssueRule();
     IssueDto issue = db.issues().insertIssue(rule, project, file, i -> i
       .setEffort(10L)
       .setLine(42)
@@ -184,10 +193,48 @@ public class SearchActionTest {
   }
 
   @Test
+  public void response_contains_correct_actions() {
+    UserDto user = db.users().insertUser();
+    userSession.logIn(user);
+    ComponentDto project = db.components().insertPublicProject();
+    ComponentDto file = db.components().insertComponent(newFileDto(project));
+    RuleDto rule = newIssueRule();
+    db.issues().insertIssue(rule, project, file, i -> i.setStatus(STATUS_OPEN));
+    db.issues().insertIssue(rule, project, file, i -> i.setStatus(STATUS_RESOLVED).setResolution(RESOLUTION_FIXED));
+    indexPermissionsAndIssues();
+
+    SearchWsResponse response = ws.newRequest()
+      .setParam(PARAM_ADDITIONAL_FIELDS, "actions")
+      .setParam(PARAM_STATUSES, STATUS_OPEN)
+      .executeProtobuf(SearchWsResponse.class);
+
+    assertThat(
+      response
+        .getIssuesList()
+        .get(0)
+        .getActions()
+        .getActionsList()
+    ).isEqualTo(asList(ACTION_SET_TAGS, COMMENT_KEY, ACTION_ASSIGN));
+
+    response = ws.newRequest()
+      .setParam(PARAM_ADDITIONAL_FIELDS, "actions")
+      .setParam(PARAM_STATUSES, STATUS_RESOLVED)
+      .executeProtobuf(SearchWsResponse.class);
+
+    assertThat(
+      response
+        .getIssuesList()
+        .get(0)
+        .getActions()
+        .getActionsList()
+    ).isEqualTo(asList(ACTION_SET_TAGS, COMMENT_KEY));
+  }
+
+  @Test
   public void issue_on_external_rule() {
     ComponentDto project = db.components().insertPublicProject();
     ComponentDto file = db.components().insertComponent(newFileDto(project));
-    RuleDefinitionDto rule = db.rules().insertIssueRule(RuleTesting.EXTERNAL_XOO, r -> r.setIsExternal(true).setLanguage("xoo"));
+    RuleDto rule = db.rules().insertIssueRule(RuleTesting.EXTERNAL_XOO, r -> r.setIsExternal(true).setLanguage("xoo"));
     IssueDto issue = db.issues().insertIssue(rule, project, file);
     indexPermissionsAndIssues();
 
@@ -204,7 +251,7 @@ public class SearchActionTest {
     ComponentDto project = db.components().insertPublicProject();
     indexPermissions();
     ComponentDto file = db.components().insertComponent(newFileDto(project));
-    RuleDefinitionDto rule = db.rules().insertIssueRule(RuleTesting.EXTERNAL_XOO, r -> r.setIsExternal(true).setLanguage("xoo").setIsAdHoc(true));
+    RuleDto rule = db.rules().insertIssueRule(RuleTesting.EXTERNAL_XOO, r -> r.setIsExternal(true).setLanguage("xoo").setIsAdHoc(true));
     IssueDto issue = db.issues().insertIssue(rule, project, file);
     indexIssues();
 
@@ -221,8 +268,12 @@ public class SearchActionTest {
     ComponentDto project = db.components().insertPublicProject();
     indexPermissions();
     ComponentDto file = db.components().insertComponent(newFileDto(project));
-    RuleDefinitionDto rule = db.rules().insertIssueRule(RuleTesting.EXTERNAL_XOO, r -> r.setIsExternal(true).setLanguage("xoo").setIsAdHoc(true));
-    RuleMetadataDto ruleMetadata = db.rules().insertOrUpdateMetadata(rule, m -> m.setAdHocName("different_rule_name"));
+    RuleDto rule = db.rules().insertIssueRule(RuleTesting.EXTERNAL_XOO,
+      r -> r
+        .setIsExternal(true)
+        .setLanguage("xoo")
+        .setIsAdHoc(true)
+        .setAdHocName("different_rule_name"));
     IssueDto issue = db.issues().insertIssue(rule, project, file);
     indexIssues();
 
@@ -236,7 +287,7 @@ public class SearchActionTest {
 
     assertThat(response.getRules().getRulesList())
       .extracting(Common.Rule::getKey, Common.Rule::getName)
-      .containsExactlyInAnyOrder(tuple(rule.getKey().toString(), ruleMetadata.getAdHocName()));
+      .containsExactlyInAnyOrder(tuple(rule.getKey().toString(), rule.getAdHocName()));
   }
 
   @Test
@@ -276,7 +327,7 @@ public class SearchActionTest {
           .setEndOffset(12)
           .build())
         .build())));
-    RuleDefinitionDto rule = newIssueRule().getDefinition();
+    RuleDto rule = newIssueRule();
     db.issues().insertIssue(rule, project, file, i -> i.setLocations(locations.build()));
     indexIssues();
 
@@ -297,7 +348,7 @@ public class SearchActionTest {
     ComponentDto project = db.components().insertPublicProject();
     indexPermissions();
     ComponentDto file = db.components().insertComponent(newFileDto(project));
-    RuleDefinitionDto rule = newIssueRule().getDefinition();
+    RuleDto rule = newIssueRule();
     IssueDto issue = db.issues().insertIssue(rule, project, file, i -> i.setKee("82fd47d4-b650-4037-80bc-7b112bd4eac2"));
     dbClient.issueChangeDao().insert(session,
       new IssueChangeDto()
@@ -336,7 +387,7 @@ public class SearchActionTest {
     ComponentDto project = db.components().insertPublicProject();
     indexPermissions();
     ComponentDto file = db.components().insertComponent(newFileDto(project));
-    RuleDefinitionDto rule = newIssueRule().getDefinition();
+    RuleDto rule = newIssueRule();
     IssueDto issue = db.issues().insertIssue(rule, project, file, i -> i.setKee("82fd47d4-b650-4037-80bc-7b112bd4eac2"));
     dbClient.issueChangeDao().insert(session,
       new IssueChangeDto()
@@ -377,7 +428,7 @@ public class SearchActionTest {
     ComponentDto project = db.components().insertPublicProject();
     indexPermissions();
     ComponentDto file = db.components().insertComponent(newFileDto(project));
-    RuleDefinitionDto rule = newIssueRule().getDefinition();
+    RuleDto rule = newIssueRule();
     db.issues().insertIssue(rule, project, file, i -> i.setAssigneeUuid(simon.getUuid()).setType(CODE_SMELL));
     indexIssues();
     userSession.logIn("john");
@@ -419,7 +470,7 @@ public class SearchActionTest {
     ComponentDto project = db.components().insertComponent(ComponentTesting.newPublicProjectDto("PROJECT_ID").setDbKey("PROJECT_KEY").setLanguage("java"));
     ComponentDto file = db.components().insertComponent(newFileDto(project, null, "FILE_ID").setDbKey("FILE_KEY").setLanguage("java"));
 
-    db.issues().insertIssue(rule.getDefinition(), project, file);
+    db.issues().insertIssue(rule, project, file);
     session.commit();
     indexIssues();
 
@@ -440,7 +491,7 @@ public class SearchActionTest {
     ComponentDto project = db.components().insertComponent(ComponentTesting.newPublicProjectDto("PROJECT_ID").setDbKey("PROJECT_KEY").setLanguage("java"));
     ComponentDto file = db.components().insertComponent(newFileDto(project, null, "FILE_ID").setDbKey("FILE_KEY").setLanguage("java"));
 
-    db.issues().insertIssue(rule.getDefinition(), project, file);
+    db.issues().insertIssue(rule, project, file);
     session.commit();
     indexIssues();
 
@@ -819,7 +870,7 @@ public class SearchActionTest {
   public void search_by_author() {
     ComponentDto project = db.components().insertPublicProject();
     ComponentDto file = db.components().insertComponent(newFileDto(project, null));
-    RuleDefinitionDto rule = db.rules().insertIssueRule();
+    RuleDto rule = db.rules().insertIssueRule();
     IssueDto issue1 = db.issues().insertIssue(rule, project, file, i -> i.setAuthorLogin("leia"));
     IssueDto issue2 = db.issues().insertIssue(rule, project, file, i -> i.setAuthorLogin("luke"));
     IssueDto issue3 = db.issues().insertIssue(rule, project, file, i -> i.setAuthorLogin("han, solo"));
@@ -844,7 +895,7 @@ public class SearchActionTest {
     assertThat(ws.newRequest()
       .setMultiParam("author", singletonList("unknown"))
       .executeProtobuf(SearchWsResponse.class).getIssuesList())
-        .isEmpty();
+      .isEmpty();
   }
 
   @Test
@@ -1000,13 +1051,13 @@ public class SearchActionTest {
   public void only_vulnerabilities_are_returned_by_cwe() {
     ComponentDto project = db.components().insertPublicProject();
     ComponentDto file = db.components().insertComponent(newFileDto(project));
-    Consumer<RuleDefinitionDto> ruleConsumer = ruleDefinitionDto -> ruleDefinitionDto
+    Consumer<RuleDto> ruleConsumer = ruleDefinitionDto -> ruleDefinitionDto
       .setSecurityStandards(Sets.newHashSet("cwe:20", "cwe:564", "cwe:89", "cwe:943", "owaspTop10:a1"))
       .setSystemTags(Sets.newHashSet("bad-practice", "cwe", "owasp-a1", "sans-top25-insecure", "sql"));
     Consumer<IssueDto> issueConsumer = issueDto -> issueDto.setTags(Sets.newHashSet("bad-practice", "cwe", "owasp-a1", "sans-top25-insecure", "sql"));
-    RuleDefinitionDto hotspotRule = db.rules().insertHotspotRule(ruleConsumer);
+    RuleDto hotspotRule = db.rules().insertHotspotRule(ruleConsumer);
     db.issues().insertHotspot(hotspotRule, project, file, issueConsumer);
-    RuleDefinitionDto issueRule = db.rules().insertIssueRule(ruleConsumer);
+    RuleDto issueRule = db.rules().insertIssueRule(ruleConsumer);
     IssueDto issueDto1 = db.issues().insertIssue(issueRule, project, file, issueConsumer, issueDto -> issueDto.setType(RuleType.VULNERABILITY));
     IssueDto issueDto2 = db.issues().insertIssue(issueRule, project, file, issueConsumer, issueDto -> issueDto.setType(RuleType.VULNERABILITY));
     IssueDto issueDto3 = db.issues().insertIssue(issueRule, project, file, issueConsumer, issueDto -> issueDto.setType(CODE_SMELL));
@@ -1025,13 +1076,13 @@ public class SearchActionTest {
   public void only_vulnerabilities_are_returned_by_owasp() {
     ComponentDto project = db.components().insertPublicProject();
     ComponentDto file = db.components().insertComponent(newFileDto(project));
-    Consumer<RuleDefinitionDto> ruleConsumer = ruleDefinitionDto -> ruleDefinitionDto
+    Consumer<RuleDto> ruleConsumer = ruleDefinitionDto -> ruleDefinitionDto
       .setSecurityStandards(Sets.newHashSet("cwe:20", "cwe:564", "cwe:89", "cwe:943", "owaspTop10:a1", "owaspTop10-2021:a2"))
       .setSystemTags(Sets.newHashSet("bad-practice", "cwe", "owasp-a1", "sans-top25-insecure", "sql"));
     Consumer<IssueDto> issueConsumer = issueDto -> issueDto.setTags(Sets.newHashSet("bad-practice", "cwe", "owasp-a1", "sans-top25-insecure", "sql"));
-    RuleDefinitionDto hotspotRule = db.rules().insertHotspotRule(ruleConsumer);
+    RuleDto hotspotRule = db.rules().insertHotspotRule(ruleConsumer);
     db.issues().insertHotspot(hotspotRule, project, file, issueConsumer);
-    RuleDefinitionDto issueRule = db.rules().insertIssueRule(ruleConsumer);
+    RuleDto issueRule = db.rules().insertIssueRule(ruleConsumer);
     IssueDto issueDto1 = db.issues().insertIssue(issueRule, project, file, issueConsumer, issueDto -> issueDto.setType(RuleType.VULNERABILITY));
     IssueDto issueDto2 = db.issues().insertIssue(issueRule, project, file, issueConsumer, issueDto -> issueDto.setType(RuleType.VULNERABILITY));
     IssueDto issueDto3 = db.issues().insertIssue(issueRule, project, file, issueConsumer, issueDto -> issueDto.setType(CODE_SMELL));
@@ -1050,13 +1101,13 @@ public class SearchActionTest {
   public void only_vulnerabilities_are_returned_by_owasp_2021() {
     ComponentDto project = db.components().insertPublicProject();
     ComponentDto file = db.components().insertComponent(newFileDto(project));
-    Consumer<RuleDefinitionDto> ruleConsumer = ruleDefinitionDto -> ruleDefinitionDto
+    Consumer<RuleDto> ruleConsumer = ruleDefinitionDto -> ruleDefinitionDto
       .setSecurityStandards(Sets.newHashSet("cwe:20", "cwe:564", "cwe:89", "cwe:943", "owaspTop10:a1", "owaspTop10-2021:a2"))
       .setSystemTags(Sets.newHashSet("bad-practice", "cwe", "owasp-a1", "sans-top25-insecure", "sql"));
     Consumer<IssueDto> issueConsumer = issueDto -> issueDto.setTags(Sets.newHashSet("bad-practice", "cwe", "owasp-a1", "sans-top25-insecure", "sql"));
-    RuleDefinitionDto hotspotRule = db.rules().insertHotspotRule(ruleConsumer);
+    RuleDto hotspotRule = db.rules().insertHotspotRule(ruleConsumer);
     db.issues().insertHotspot(hotspotRule, project, file, issueConsumer);
-    RuleDefinitionDto issueRule = db.rules().insertIssueRule(ruleConsumer);
+    RuleDto issueRule = db.rules().insertIssueRule(ruleConsumer);
     IssueDto issueDto1 = db.issues().insertIssue(issueRule, project, file, issueConsumer, issueDto -> issueDto.setType(RuleType.VULNERABILITY));
     IssueDto issueDto2 = db.issues().insertIssue(issueRule, project, file, issueConsumer, issueDto -> issueDto.setType(RuleType.VULNERABILITY));
     IssueDto issueDto3 = db.issues().insertIssue(issueRule, project, file, issueConsumer, issueDto -> issueDto.setType(CODE_SMELL));
@@ -1075,13 +1126,13 @@ public class SearchActionTest {
   public void only_vulnerabilities_are_returned_by_sansTop25() {
     ComponentDto project = db.components().insertPublicProject();
     ComponentDto file = db.components().insertComponent(newFileDto(project));
-    Consumer<RuleDefinitionDto> ruleConsumer = ruleDefinitionDto -> ruleDefinitionDto
+    Consumer<RuleDto> ruleConsumer = ruleDefinitionDto -> ruleDefinitionDto
       .setSecurityStandards(Sets.newHashSet("cwe:266", "cwe:732", "owaspTop10:a5"))
       .setSystemTags(Sets.newHashSet("cert", "cwe", "owasp-a5", "sans-top25-porous"));
     Consumer<IssueDto> issueConsumer = issueDto -> issueDto.setTags(Sets.newHashSet("cert", "cwe", "owasp-a5", "sans-top25-porous"));
-    RuleDefinitionDto hotspotRule = db.rules().insertHotspotRule(ruleConsumer);
+    RuleDto hotspotRule = db.rules().insertHotspotRule(ruleConsumer);
     db.issues().insertHotspot(hotspotRule, project, file, issueConsumer);
-    RuleDefinitionDto issueRule = db.rules().insertIssueRule(ruleConsumer);
+    RuleDto issueRule = db.rules().insertIssueRule(ruleConsumer);
     IssueDto issueDto1 = db.issues().insertIssue(issueRule, project, file, issueConsumer, issueDto -> issueDto.setType(RuleType.VULNERABILITY));
     IssueDto issueDto2 = db.issues().insertIssue(issueRule, project, file, issueConsumer, issueDto -> issueDto.setType(RuleType.VULNERABILITY));
     IssueDto issueDto3 = db.issues().insertIssue(issueRule, project, file, issueConsumer, issueDto -> issueDto.setType(CODE_SMELL));
@@ -1100,13 +1151,13 @@ public class SearchActionTest {
   public void only_vulnerabilities_are_returned_by_sonarsource_security() {
     ComponentDto project = db.components().insertPublicProject();
     ComponentDto file = db.components().insertComponent(newFileDto(project));
-    Consumer<RuleDefinitionDto> ruleConsumer = ruleDefinitionDto -> ruleDefinitionDto
+    Consumer<RuleDto> ruleConsumer = ruleDefinitionDto -> ruleDefinitionDto
       .setSecurityStandards(Sets.newHashSet("cwe:20", "cwe:564", "cwe:89", "cwe:943", "owaspTop10:a1"))
       .setSystemTags(Sets.newHashSet("cwe", "owasp-a1", "sans-top25-insecure", "sql"));
     Consumer<IssueDto> issueConsumer = issueDto -> issueDto.setTags(Sets.newHashSet("cwe", "owasp-a1", "sans-top25-insecure", "sql"));
-    RuleDefinitionDto hotspotRule = db.rules().insertHotspotRule(ruleConsumer);
+    RuleDto hotspotRule = db.rules().insertHotspotRule(ruleConsumer);
     db.issues().insertHotspot(hotspotRule, project, file, issueConsumer);
-    RuleDefinitionDto issueRule = db.rules().insertIssueRule(ruleConsumer);
+    RuleDto issueRule = db.rules().insertIssueRule(ruleConsumer);
     IssueDto issueDto1 = db.issues().insertIssue(issueRule, project, file, issueConsumer, issueDto -> issueDto.setType(RuleType.VULNERABILITY));
     IssueDto issueDto2 = db.issues().insertIssue(issueRule, project, file, issueConsumer, issueDto -> issueDto.setType(RuleType.VULNERABILITY));
     IssueDto issueDto3 = db.issues().insertIssue(issueRule, project, file, issueConsumer, issueDto -> issueDto.setType(CODE_SMELL));
@@ -1125,7 +1176,7 @@ public class SearchActionTest {
   public void security_hotspots_are_not_returned_by_default() {
     ComponentDto project = db.components().insertPublicProject();
     ComponentDto file = db.components().insertComponent(newFileDto(project));
-    RuleDefinitionDto rule = db.rules().insertIssueRule();
+    RuleDto rule = db.rules().insertIssueRule();
     db.issues().insertIssue(rule, project, file, i -> i.setType(RuleType.BUG));
     db.issues().insertIssue(rule, project, file, i -> i.setType(RuleType.VULNERABILITY));
     db.issues().insertIssue(rule, project, file, i -> i.setType(CODE_SMELL));
@@ -1143,11 +1194,11 @@ public class SearchActionTest {
   public void security_hotspots_are_not_returned_by_issues_param() {
     ComponentDto project = db.components().insertPublicProject();
     ComponentDto file = db.components().insertComponent(newFileDto(project));
-    RuleDefinitionDto issueRule = db.rules().insertIssueRule();
+    RuleDto issueRule = db.rules().insertIssueRule();
     IssueDto bugIssue = db.issues().insertIssue(issueRule, project, file, i -> i.setType(RuleType.BUG));
     IssueDto vulnerabilityIssue = db.issues().insertIssue(issueRule, project, file, i -> i.setType(RuleType.VULNERABILITY));
     IssueDto codeSmellIssue = db.issues().insertIssue(issueRule, project, file, i -> i.setType(CODE_SMELL));
-    RuleDefinitionDto hotspotRule = db.rules().insertHotspotRule();
+    RuleDto hotspotRule = db.rules().insertHotspotRule();
     IssueDto hotspot = db.issues().insertHotspot(hotspotRule, project, file);
     indexPermissionsAndIssues();
 
@@ -1164,13 +1215,13 @@ public class SearchActionTest {
   public void security_hotspots_are_not_returned_by_cwe() {
     ComponentDto project = db.components().insertPublicProject();
     ComponentDto file = db.components().insertComponent(newFileDto(project));
-    Consumer<RuleDefinitionDto> ruleConsumer = ruleDefinitionDto -> ruleDefinitionDto
+    Consumer<RuleDto> ruleConsumer = ruleDefinitionDto -> ruleDefinitionDto
       .setSecurityStandards(Sets.newHashSet("cwe:20", "cwe:564", "cwe:89", "cwe:943", "owaspTop10:a1"))
       .setSystemTags(Sets.newHashSet("bad-practice", "cwe", "owasp-a1", "sans-top25-insecure", "sql"));
     Consumer<IssueDto> issueConsumer = issueDto -> issueDto.setTags(Sets.newHashSet("bad-practice", "cwe", "owasp-a1", "sans-top25-insecure", "sql"));
-    RuleDefinitionDto hotspotRule = db.rules().insertHotspotRule(ruleConsumer);
+    RuleDto hotspotRule = db.rules().insertHotspotRule(ruleConsumer);
     db.issues().insertHotspot(hotspotRule, project, file, issueConsumer);
-    RuleDefinitionDto issueRule = db.rules().insertIssueRule(ruleConsumer);
+    RuleDto issueRule = db.rules().insertIssueRule(ruleConsumer);
     IssueDto issueDto1 = db.issues().insertIssue(issueRule, project, file, issueConsumer, issueDto -> issueDto.setType(RuleType.VULNERABILITY));
     IssueDto issueDto2 = db.issues().insertIssue(issueRule, project, file, issueConsumer, issueDto -> issueDto.setType(RuleType.VULNERABILITY));
     indexPermissions();
@@ -1190,9 +1241,9 @@ public class SearchActionTest {
     UserDto user = db.users().insertUser();
     ComponentDto project = db.components().insertPublicProject();
     ComponentDto file = db.components().insertComponent(newFileDto(project));
-    RuleDefinitionDto hotspotRule = db.rules().insertHotspotRule();
+    RuleDto hotspotRule = db.rules().insertHotspotRule();
     db.issues().insertHotspot(hotspotRule, project, file, issueDto -> issueDto.setAssigneeUuid(user.getUuid()));
-    RuleDefinitionDto issueRule = db.rules().insertIssueRule();
+    RuleDto issueRule = db.rules().insertIssueRule();
     IssueDto issueDto1 = db.issues().insertIssue(issueRule, project, file, issueDto -> issueDto.setAssigneeUuid(user.getUuid()));
     IssueDto issueDto2 = db.issues().insertIssue(issueRule, project, file, issueDto -> issueDto.setAssigneeUuid(user.getUuid()));
     IssueDto issueDto3 = db.issues().insertIssue(issueRule, project, file, issueDto -> issueDto.setAssigneeUuid(user.getUuid()));
@@ -1213,7 +1264,7 @@ public class SearchActionTest {
   public void security_hotspots_are_not_returned_by_rule() {
     ComponentDto project = db.components().insertPublicProject();
     ComponentDto file = db.components().insertComponent(newFileDto(project));
-    RuleDefinitionDto hotspotRule = db.rules().insertHotspotRule();
+    RuleDto hotspotRule = db.rules().insertHotspotRule();
     db.issues().insertHotspot(hotspotRule, project, file);
     indexPermissionsAndIssues();
 
@@ -1228,7 +1279,7 @@ public class SearchActionTest {
   public void security_hotspots_are_not_returned_by_issues_param_only() {
     ComponentDto project = db.components().insertPublicProject();
     ComponentDto file = db.components().insertComponent(newFileDto(project));
-    RuleDefinitionDto rule = db.rules().insertHotspotRule();
+    RuleDto rule = db.rules().insertHotspotRule();
     List<IssueDto> hotspots = IntStream.range(1, 2 + new Random().nextInt(10))
       .mapToObj(value -> db.issues().insertHotspot(rule, project, file))
       .collect(Collectors.toList());
@@ -1247,7 +1298,7 @@ public class SearchActionTest {
   public void fail_if_trying_to_filter_issues_by_hotspots() {
     ComponentDto project = db.components().insertPublicProject();
     ComponentDto file = db.components().insertComponent(newFileDto(project));
-    RuleDefinitionDto hotspotRule = newHotspotRule().getDefinition();
+    RuleDto hotspotRule = newHotspotRule();
     db.issues().insertHotspot(hotspotRule, project, file);
     insertIssues(i -> i.setType(RuleType.BUG), i -> i.setType(RuleType.VULNERABILITY),
       i -> i.setType(RuleType.CODE_SMELL));
@@ -1264,11 +1315,11 @@ public class SearchActionTest {
   public void security_hotspot_are_ignored_when_filtering_by_severities() {
     ComponentDto project = db.components().insertPublicProject();
     ComponentDto file = db.components().insertComponent(newFileDto(project));
-    RuleDefinitionDto issueRule = db.rules().insertIssueRule();
+    RuleDto issueRule = db.rules().insertIssueRule();
     IssueDto bugIssue = db.issues().insertIssue(issueRule, project, file, i -> i.setType(RuleType.BUG).setSeverity(Severity.MAJOR.name()));
     IssueDto vulnerabilityIssue = db.issues().insertIssue(issueRule, project, file, i -> i.setType(RuleType.VULNERABILITY).setSeverity(Severity.MAJOR.name()));
     IssueDto codeSmellIssue = db.issues().insertIssue(issueRule, project, file, i -> i.setType(CODE_SMELL).setSeverity(Severity.MAJOR.name()));
-    RuleDefinitionDto hotspotRule = db.rules().insertHotspotRule();
+    RuleDto hotspotRule = db.rules().insertHotspotRule();
     db.issues().insertHotspot(hotspotRule, project, file, i -> i.setSeverity(Severity.MAJOR.name()));
     indexPermissions();
     indexIssues();
@@ -1439,21 +1490,21 @@ public class SearchActionTest {
   }
 
   private RuleDto newIssueRule() {
-    RuleDto rule = RuleTesting.newXooX1()
+    RuleDto rule = newRule(XOO_X1, createDefaultRuleDescriptionSection(uuidFactory.create(), "Rule desc"))
+      .setLanguage("xoo")
       .setName("Rule name")
-      .setDescription("Rule desc")
       .setStatus(RuleStatus.READY);
-    db.rules().insert(rule.getDefinition());
+    db.rules().insert(rule);
     return rule;
   }
 
   private RuleDto newHotspotRule() {
-    RuleDto rule = RuleTesting.newXooX2()
+    RuleDto rule = newRule(XOO_X2, createDefaultRuleDescriptionSection(uuidFactory.create(), "Rule desc"))
+      .setLanguage("xoo")
       .setName("Rule name")
-      .setDescription("Rule desc")
       .setStatus(RuleStatus.READY)
       .setType(SECURITY_HOTSPOT_VALUE);
-    db.rules().insert(rule.getDefinition());
+    db.rules().insert(rule);
     return rule;
   }
 
@@ -1481,7 +1532,7 @@ public class SearchActionTest {
   private void insertIssues(Consumer<IssueDto>... populators) {
     UserDto john = db.users().insertUser();
     userSession.logIn(john);
-    RuleDefinitionDto rule = db.rules().insertIssueRule();
+    RuleDto rule = db.rules().insertIssueRule();
     ComponentDto project = db.components().insertPublicProject();
     ComponentDto file = db.components().insertComponent(newFileDto(project));
     for (Consumer<IssueDto> populator : populators) {

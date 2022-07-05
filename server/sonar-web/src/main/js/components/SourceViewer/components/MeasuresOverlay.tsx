@@ -19,7 +19,7 @@
  */
 import { groupBy, keyBy, sortBy } from 'lodash';
 import * as React from 'react';
-import { Link } from 'react-router';
+import { Link } from 'react-router-dom';
 import { getFacets } from '../../../api/issues';
 import { getMeasures } from '../../../api/measures';
 import { getAllMetrics } from '../../../api/metrics';
@@ -379,13 +379,6 @@ export default class MeasuresOverlay extends React.PureComponent<Props, State> {
               <Link to={getBranchLikeUrl(sourceViewerFile.project, branchLike)}>
                 {sourceViewerFile.projectName}
               </Link>
-
-              {sourceViewerFile.subProject && (
-                <>
-                  <QualifierIcon className="big-spacer-left little-spacer-right" qualifier="BRC" />
-                  {sourceViewerFile.subProjectName}
-                </>
-              )}
             </div>
 
             <div className="display-flex-center little-spacer-top">

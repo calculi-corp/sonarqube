@@ -17,9 +17,9 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { findLastIndex } from 'lodash';
+import { findLastIndex, keyBy } from 'lodash';
 import * as React from 'react';
-import { getDuplications } from '../../../api/components';
+import { getComponentForSourceViewer, getDuplications, getSources } from '../../../api/components';
 import { getIssueFlowSnippets } from '../../../api/issues';
 import DuplicationPopup from '../../../components/SourceViewer/components/DuplicationPopup';
 import {
@@ -38,7 +38,9 @@ import { WorkspaceContext } from '../../../components/workspace/context';
 import { getBranchLikeQuery } from '../../../helpers/branch-like';
 import { throwGlobalError } from '../../../helpers/error';
 import { translate } from '../../../helpers/l10n';
+import { HttpStatus } from '../../../helpers/request';
 import { BranchLike } from '../../../types/branch-like';
+import { isFile } from '../../../types/component';
 import {
   Dict,
   DuplicatedFile,
@@ -49,7 +51,7 @@ import {
   SourceViewerFile
 } from '../../../types/types';
 import ComponentSourceSnippetGroupViewer from './ComponentSourceSnippetGroupViewer';
-import { groupLocationsByComponent } from './utils';
+import { getPrimaryLocation, groupLocationsByComponent } from './utils';
 
 interface Props {
   branchLike: BranchLike | undefined;
@@ -58,6 +60,7 @@ interface Props {
   issues: Issue[];
   locations: FlowLocation[];
   onIssueChange: (issue: Issue) => void;
+  onIssueSelect: (issueKey: string) => void;
   onLoaded?: () => void;
   onLocationSelect: (index: number) => void;
   scroll?: (element: HTMLElement) => void;
@@ -85,12 +88,12 @@ export default class CrossComponentSourceViewerWrapper extends React.PureCompone
 
   componentDidMount() {
     this.mounted = true;
-    this.fetchIssueFlowSnippets(this.props.issue.key);
+    this.fetchIssueFlowSnippets();
   }
 
-  componentWillReceiveProps(newProps: Props) {
-    if (newProps.issue.key !== this.props.issue.key) {
-      this.fetchIssueFlowSnippets(newProps.issue.key);
+  componentDidUpdate(prevProps: Props) {
+    if (prevProps.issue.key !== this.props.issue.key) {
+      this.fetchIssueFlowSnippets();
     }
   }
 
@@ -116,30 +119,47 @@ export default class CrossComponentSourceViewerWrapper extends React.PureCompone
     );
   };
 
-  fetchIssueFlowSnippets(issueKey: string) {
+  async fetchIssueFlowSnippets() {
+    const { issue, branchLike } = this.props;
     this.setState({ loading: true });
-    getIssueFlowSnippets(issueKey).then(
-      components => {
-        if (this.mounted) {
-          this.setState({
-            components,
-            issuePopup: undefined,
-            loading: false
-          });
-          if (this.props.onLoaded) {
-            this.props.onLoaded();
-          }
-        }
-      },
-      (response: Response) => {
-        if (response.status !== 403) {
-          throwGlobalError(response);
-        }
-        if (this.mounted) {
-          this.setState({ loading: false, notAccessible: response.status === 403 });
+
+    try {
+      const components = await getIssueFlowSnippets(issue.key);
+      if (components[issue.component] === undefined) {
+        const issueComponent = await getComponentForSourceViewer({
+          component: issue.component,
+          ...getBranchLikeQuery(branchLike)
+        });
+        components[issue.component] = { component: issueComponent, sources: [] };
+        if (isFile(issueComponent.q)) {
+          const sources = await getSources({
+            key: issueComponent.key,
+            ...getBranchLikeQuery(branchLike),
+            from: 1,
+            to: 10
+          }).then(lines => keyBy(lines, 'line'));
+          components[issue.component].sources = sources;
         }
       }
-    );
+      if (this.mounted) {
+        this.setState({
+          components,
+          issuePopup: undefined,
+          loading: false
+        });
+        if (this.props.onLoaded) {
+          this.props.onLoaded();
+        }
+      }
+    } catch (response) {
+      const rsp = response as Response;
+      if (rsp.status !== HttpStatus.Forbidden) {
+        throwGlobalError(response);
+      }
+      if (this.mounted) {
+        this.setState({ loading: false, notAccessible: rsp.status === HttpStatus.Forbidden });
+      }
+    }
   }
 
   handleIssuePopupToggle = (issue: string, popupName: string, open?: boolean) => {
@@ -209,6 +229,10 @@ export default class CrossComponentSourceViewerWrapper extends React.PureCompone
       ({ component }) => component.key === issue.component
     );
 
+    if (components[issue.component] === undefined) {
+      return null;
+    }
+
     return (
       <div>
         {locationsByComponent.map((snippetGroup, i) => {
@@ -230,6 +254,7 @@ export default class CrossComponentSourceViewerWrapper extends React.PureCompone
                 loadDuplications={this.fetchDuplications}
                 locations={snippetGroup.locations || []}
                 onIssueChange={this.props.onIssueChange}
+                onIssueSelect={this.props.onIssueSelect}
                 onIssuePopupToggle={this.handleIssuePopupToggle}
                 onLocationSelect={this.props.onLocationSelect}
                 renderDuplicationPopup={this.renderDuplicationPopup}
@@ -239,6 +264,32 @@ export default class CrossComponentSourceViewerWrapper extends React.PureCompone
             </SourceViewerContext.Provider>
           );
         })}
+
+        {locationsByComponent.length === 0 && (
+          <ComponentSourceSnippetGroupViewer
+            branchLike={this.props.branchLike}
+            duplications={duplications}
+            duplicationsByLine={duplicationsByLine}
+            highlightedLocationMessage={this.props.highlightedLocationMessage}
+            issue={issue}
+            issuePopup={this.state.issuePopup}
+            issuesByLine={issuesByComponent[issue.component] || {}}
+            isLastOccurenceOfPrimaryComponent={true}
+            lastSnippetGroup={true}
+            loadDuplications={this.fetchDuplications}
+            locations={[]}
+            onIssueChange={this.props.onIssueChange}
+            onIssueSelect={this.props.onIssueSelect}
+            onIssuePopupToggle={this.handleIssuePopupToggle}
+            onLocationSelect={this.props.onLocationSelect}
+            renderDuplicationPopup={this.renderDuplicationPopup}
+            scroll={this.props.scroll}
+            snippetGroup={{
+              locations: [getPrimaryLocation(issue)],
+              ...components[issue.component]
+            }}
+          />
+        )}
       </div>
     );
   }

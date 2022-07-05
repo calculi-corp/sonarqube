@@ -18,13 +18,13 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
-import { Link } from 'react-router';
+import { Link } from 'react-router-dom';
 import { colors } from '../../../app/theme';
 import BranchIcon from '../../../components/icons/BranchIcon';
 import QualifierIcon from '../../../components/icons/QualifierIcon';
 import { getBranchLikeQuery } from '../../../helpers/branch-like';
 import { translate } from '../../../helpers/l10n';
-import { getComponentOverviewUrl } from '../../../helpers/urls';
+import { CodeScope, getComponentOverviewUrl, queryToSearch } from '../../../helpers/urls';
 import { BranchLike } from '../../../types/branch-like';
 import {
   ComponentQualifier,
@@ -33,6 +33,7 @@ import {
   isProject
 } from '../../../types/component';
 import { ComponentMeasure } from '../../../types/types';
+import { mostCommonPrefix } from '../utils';
 
 export function getTooltip(component: ComponentMeasure) {
   const isFile = component.qualifier === 'FIL' || component.qualifier === 'UTS';
@@ -44,21 +45,6 @@ export function getTooltip(component: ComponentMeasure) {
   return [component.name, component.key, component.branch].filter(s => !!s).join('\n\n');
 }
 
-export function mostCommonPrefix(strings: string[]) {
-  const sortedStrings = strings.slice(0).sort();
-  const firstString = sortedStrings[0];
-  const firstStringLength = firstString.length;
-  const lastString = sortedStrings[sortedStrings.length - 1];
-  let i = 0;
-  while (i < firstStringLength && firstString.charAt(i) === lastString.charAt(i)) {
-    i++;
-  }
-  const prefix = firstString.substr(0, i);
-  const prefixTokens = prefix.split(/[\s\\/]/);
-  const lastPrefixPart = prefixTokens[prefixTokens.length - 1];
-  return prefix.substr(0, prefix.length - lastPrefixPart.length);
-}
-
 export interface Props {
   branchLike?: BranchLike;
   canBrowse?: boolean;
@@ -66,6 +52,7 @@ export interface Props {
   previous?: ComponentMeasure;
   rootComponent: ComponentMeasure;
   unclickable?: boolean;
+  newCodeSelected?: boolean;
 }
 
 export default function ComponentName({
@@ -74,61 +61,10 @@ export default function ComponentName({
   unclickable = false,
   rootComponent,
   previous,
-  canBrowse = false
+  canBrowse = false,
+  newCodeSelected
 }: Props) {
-  const areBothDirs = component.qualifier === 'DIR' && previous && previous.qualifier === 'DIR';
-  const prefix =
-    areBothDirs && previous !== undefined
-      ? mostCommonPrefix([component.name + '/', previous.name + '/'])
-      : '';
-  const name = prefix ? (
-    <span>
-      <span style={{ color: colors.secondFontColor }}>{prefix}</span>
-      <span>{component.name.substr(prefix.length)}</span>
-    </span>
-  ) : (
-    component.name
-  );
-
-  let inner = null;
-
-  if (
-    !unclickable &&
-    (isPortfolioLike(component.qualifier) ||
-      isApplication(component.qualifier) ||
-      isProject(component.qualifier))
-  ) {
-    const branch = [ComponentQualifier.Application, ComponentQualifier.Portfolio].includes(
-      rootComponent.qualifier as ComponentQualifier
-    )
-      ? component.branch
-      : undefined;
-    inner = (
-      <Link
-        className="link-with-icon"
-        to={getComponentOverviewUrl(component.refKey || component.key, component.qualifier, {
-          branch
-        })}>
-        <QualifierIcon qualifier={component.qualifier} /> <span>{name}</span>
-      </Link>
-    );
-  } else if (canBrowse) {
-    const query = { id: rootComponent.key, ...getBranchLikeQuery(branchLike) };
-    if (component.key !== rootComponent.key) {
-      Object.assign(query, { selected: component.key });
-    }
-    inner = (
-      <Link className="link-with-icon" to={{ pathname: '/code', query }}>
-        <QualifierIcon qualifier={component.qualifier} /> <span>{name}</span>
-      </Link>
-    );
-  } else {
-    inner = (
-      <span>
-        <QualifierIcon qualifier={component.qualifier} /> {name}
-      </span>
-    );
-  }
+  const ariaLabel = unclickable ? translate('code.parent_folder') : undefined;
 
   if (
     [ComponentQualifier.Application, ComponentQualifier.Portfolio].includes(
@@ -140,8 +76,16 @@ export default function ComponentName({
   ) {
     return (
       <span className="max-width-100 display-inline-flex-center">
-        <span className="text-ellipsis" title={getTooltip(component)}>
-          {inner}
+        <span className="text-ellipsis" title={getTooltip(component)} aria-label={ariaLabel}>
+          {renderNameWithIcon(
+            branchLike,
+            component,
+            previous,
+            rootComponent,
+            unclickable,
+            canBrowse,
+            newCodeSelected
+          )}
         </span>
         {component.branch ? (
           <span className="text-ellipsis spacer-left">
@@ -153,13 +97,83 @@ export default function ComponentName({
         )}
       </span>
     );
-  } else {
+  }
+  return (
+    <span
+      className="max-width-100 display-inline-block text-ellipsis"
+      title={getTooltip(component)}
+      aria-label={ariaLabel}>
+      {renderNameWithIcon(branchLike, component, previous, rootComponent, unclickable, canBrowse)}
+    </span>
+  );
+}
+
+function renderNameWithIcon(
+  branchLike: BranchLike | undefined,
+  component: ComponentMeasure,
+  previous: ComponentMeasure | undefined,
+  rootComponent: ComponentMeasure,
+  unclickable = false,
+  canBrowse = false,
+  newCodeSelected = true
+) {
+  const name = renderName(component, previous);
+  const codeType = newCodeSelected ? CodeScope.New : CodeScope.Overall;
+  if (
+    !unclickable &&
+    (isPortfolioLike(component.qualifier) ||
+      isApplication(component.qualifier) ||
+      isProject(component.qualifier))
+  ) {
+    const branch = [ComponentQualifier.Application, ComponentQualifier.Portfolio].includes(
+      rootComponent.qualifier as ComponentQualifier
+    )
+      ? component.branch
+      : undefined;
     return (
-      <span
-        className="max-width-100 display-inline-block text-ellipsis"
-        title={getTooltip(component)}>
-        {inner}
-      </span>
+      <Link
+        className="link-with-icon"
+        to={getComponentOverviewUrl(
+          component.refKey || component.key,
+          component.qualifier,
+          {
+            branch
+          },
+          codeType
+        )}>
+        <QualifierIcon qualifier={component.qualifier} /> <span>{name}</span>
+      </Link>
+    );
+  } else if (canBrowse) {
+    const query = { id: rootComponent.key, ...getBranchLikeQuery(branchLike) };
+    if (component.key !== rootComponent.key) {
+      Object.assign(query, { selected: component.key });
+    }
+    return (
+      <Link className="link-with-icon" to={{ pathname: '/code', search: queryToSearch(query) }}>
+        <QualifierIcon qualifier={component.qualifier} /> <span>{name}</span>
+      </Link>
     );
   }
+  return (
+    <span>
+      <QualifierIcon qualifier={component.qualifier} /> {name}
+    </span>
+  );
+}
+
+function renderName(component: ComponentMeasure, previous: ComponentMeasure | undefined) {
+  const areBothDirs = component.qualifier === 'DIR' && previous && previous.qualifier === 'DIR';
+  const prefix =
+    areBothDirs && previous !== undefined
+      ? mostCommonPrefix([component.name + '/', previous.name + '/'])
+      : '';
+  return prefix ? (
+    <span>
+      <span style={{ color: colors.secondFontColor }}>{prefix}</span>
+      <span>{component.name.slice(prefix.length)}</span>
+    </span>
+  ) : (
+    component.name
+  );
 }

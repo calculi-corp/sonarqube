@@ -76,6 +76,7 @@ import org.sonar.db.issue.NewCodeReferenceIssueDto;
 import org.sonar.db.issue.PrIssueDto;
 import org.sonar.db.mapping.ProjectMappingDto;
 import org.sonar.db.mapping.ProjectMappingsMapper;
+import org.sonar.db.measure.LargestBranchNclocDto;
 import org.sonar.db.measure.LiveMeasureMapper;
 import org.sonar.db.measure.MeasureDto;
 import org.sonar.db.measure.MeasureMapper;
@@ -131,7 +132,7 @@ import org.sonar.db.qualityprofile.QProfileEditGroupsMapper;
 import org.sonar.db.qualityprofile.QProfileEditUsersMapper;
 import org.sonar.db.qualityprofile.QualityProfileExportMapper;
 import org.sonar.db.qualityprofile.QualityProfileMapper;
-import org.sonar.db.rule.RuleDto;
+import org.sonar.db.report.RegulatoryReportMapper;
 import org.sonar.db.rule.RuleMapper;
 import org.sonar.db.rule.RuleParamDto;
 import org.sonar.db.rule.RuleRepositoryMapper;
@@ -201,6 +202,7 @@ public class MyBatis {
     confBuilder.loadAlias("Issue", IssueDto.class);
     confBuilder.loadAlias("NewCodeReferenceIssue", NewCodeReferenceIssueDto.class);
     confBuilder.loadAlias("Measure", MeasureDto.class);
+    confBuilder.loadAlias("LargestBranchNclocDto", LargestBranchNclocDto.class);
     confBuilder.loadAlias("NotificationQueue", NotificationQueueDto.class);
     confBuilder.loadAlias("PermissionTemplateCharacteristic", PermissionTemplateCharacteristicDto.class);
     confBuilder.loadAlias("PermissionTemplateGroup", PermissionTemplateGroupDto.class);
@@ -221,7 +223,6 @@ public class MyBatis {
     confBuilder.loadAlias("QualityGate", QualityGateDto.class);
     confBuilder.loadAlias("Resource", ResourceDto.class);
     confBuilder.loadAlias("RuleParam", RuleParamDto.class);
-    confBuilder.loadAlias("Rule", RuleDto.class);
     confBuilder.loadAlias("SchemaMigration", SchemaMigrationDto.class);
     confBuilder.loadAlias("ScrapProperty", ScrapPropertyDto.class);
     confBuilder.loadAlias("ScrapAnalysisProperty", ScrapAnalysisPropertyDto.class);
@@ -294,6 +295,7 @@ public class MyBatis {
       QualityGateUserPermissionsMapper.class,
       QualityProfileMapper.class,
       QualityProfileExportMapper.class,
+      RegulatoryReportMapper.class,
       RoleMapper.class,
       RuleMapper.class,
       RuleRepositoryMapper.class,

@@ -20,17 +20,17 @@
 import { uniqBy } from 'lodash';
 import * as React from 'react';
 import { Helmet } from 'react-helmet-async';
-import Suggestions from '../../../app/components/embed-docs-modal/Suggestions';
 import ScreenPositionHelper from '../../../components/common/ScreenPositionHelper';
+import Suggestions from '../../../components/embed-docs-modal/Suggestions';
 import { Location, withRouter } from '../../../components/hoc/withRouter';
 import { translate } from '../../../helpers/l10n';
 import { ExtendedSettingDefinition } from '../../../types/settings';
 import { Component } from '../../../types/types';
+import { CATEGORY_OVERRIDES } from '../constants';
 import { getDefaultCategory } from '../utils';
 import { ADDITIONAL_CATEGORIES } from './AdditionalCategories';
 import AllCategoriesList from './AllCategoriesList';
 import CategoryDefinitionsList from './CategoryDefinitionsList';
-import CATEGORY_OVERRIDES from './CategoryOverrides';
 import PageHeader from './PageHeader';
 
 export interface SettingsAppRendererProps {

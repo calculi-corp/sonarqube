@@ -29,29 +29,50 @@ exports[`generates token 1`] = `
             onCheck={[Function]}
             value="generate"
           >
-            onboarding.token.generate_token
+            onboarding.token.generate_project_token
           </Radio>
           <div
             className="big-spacer-top"
           >
             <form
+              className="display-flex-column"
               onSubmit={[Function]}
             >
-              <input
-                autoFocus={true}
-                className="input-super-large spacer-right text-middle"
-                onChange={[Function]}
-                placeholder="onboarding.token.generate_token.placeholder"
-                required={true}
-                type="text"
-                value=""
-              />
-              <SubmitButton
-                className="text-middle"
-                disabled={true}
+              <label
+                className="h3"
+                htmlFor="generate-token-input"
               >
-                onboarding.token.generate
-              </SubmitButton>
+                onboarding.token.generate_project_token.label
+                <DocumentationTooltip
+                  className="spacer-left"
+                  content="onboarding.token.generate_project_token.help"
+                  links={
+                    Array [
+                      Object {
+                        "href": "/documentation/user-guide/user-token/",
+                        "label": "learn_more",
+                      },
+                    ]
+                  }
+                />
+              </label>
+              <div>
+                <input
+                  autoFocus={true}
+                  className="input-super-large spacer-right spacer-top text-middle"
+                  id="generate-token-input"
+                  onChange={[Function]}
+                  required={true}
+                  type="text"
+                  value=""
+                />
+                <SubmitButton
+                  className="text-middle spacer-top"
+                  disabled={true}
+                >
+                  onboarding.token.generate
+                </SubmitButton>
+              </div>
             </form>
           </div>
         </div>
@@ -76,8 +97,6 @@ exports[`generates token 1`] = `
           values={
             Object {
               "link": <Link
-                onlyActiveOnIndex={false}
-                style={Object {}}
                 target="_blank"
                 to="/account/security"
               >
@@ -121,26 +140,47 @@ exports[`generates token 2`] = `
             onCheck={[Function]}
             value="generate"
           >
-            onboarding.token.generate_token
+            onboarding.token.generate_project_token
           </Radio>
           <div
             className="big-spacer-top"
           >
             <form
+              className="display-flex-column"
               onSubmit={[Function]}
             >
-              <input
-                autoFocus={true}
-                className="input-super-large spacer-right text-middle"
-                onChange={[Function]}
-                placeholder="onboarding.token.generate_token.placeholder"
-                required={true}
-                type="text"
-                value="my token"
-              />
-              <i
-                className="spinner text-middle"
-              />
+              <label
+                className="h3"
+                htmlFor="generate-token-input"
+              >
+                onboarding.token.generate_project_token.label
+                <DocumentationTooltip
+                  className="spacer-left"
+                  content="onboarding.token.generate_project_token.help"
+                  links={
+                    Array [
+                      Object {
+                        "href": "/documentation/user-guide/user-token/",
+                        "label": "learn_more",
+                      },
+                    ]
+                  }
+                />
+              </label>
+              <div>
+                <input
+                  autoFocus={true}
+                  className="input-super-large spacer-right spacer-top text-middle"
+                  id="generate-token-input"
+                  onChange={[Function]}
+                  required={true}
+                  type="text"
+                  value="my token"
+                />
+                <i
+                  className="spinner text-middle"
+                />
+              </div>
             </form>
           </div>
         </div>
@@ -165,8 +205,6 @@ exports[`generates token 2`] = `
           values={
             Object {
               "link": <Link
-                onlyActiveOnIndex={false}
-                style={Object {}}
                 target="_blank"
                 to="/account/security"
               >
@@ -231,8 +269,6 @@ exports[`generates token 3`] = `
           values={
             Object {
               "link": <Link
-                onlyActiveOnIndex={false}
-                style={Object {}}
                 target="_blank"
                 to="/account/security"
               >
@@ -307,8 +343,6 @@ exports[`revokes token 1`] = `
           values={
             Object {
               "link": <Link
-                onlyActiveOnIndex={false}
-                style={Object {}}
                 target="_blank"
                 to="/account/security"
               >
@@ -382,8 +416,6 @@ exports[`revokes token 2`] = `
           values={
             Object {
               "link": <Link
-                onlyActiveOnIndex={false}
-                style={Object {}}
                 target="_blank"
                 to="/account/security"
               >
@@ -437,29 +469,50 @@ exports[`revokes token 3`] = `
             onCheck={[Function]}
             value="generate"
           >
-            onboarding.token.generate_token
+            onboarding.token.generate_project_token
           </Radio>
           <div
             className="big-spacer-top"
           >
             <form
+              className="display-flex-column"
               onSubmit={[Function]}
             >
-              <input
-                autoFocus={true}
-                className="input-super-large spacer-right text-middle"
-                onChange={[Function]}
-                placeholder="onboarding.token.generate_token.placeholder"
-                required={true}
-                type="text"
-                value=""
-              />
-              <SubmitButton
-                className="text-middle"
-                disabled={true}
+              <label
+                className="h3"
+                htmlFor="generate-token-input"
               >
-                onboarding.token.generate
-              </SubmitButton>
+                onboarding.token.generate_project_token.label
+                <DocumentationTooltip
+                  className="spacer-left"
+                  content="onboarding.token.generate_project_token.help"
+                  links={
+                    Array [
+                      Object {
+                        "href": "/documentation/user-guide/user-token/",
+                        "label": "learn_more",
+                      },
+                    ]
+                  }
+                />
+              </label>
+              <div>
+                <input
+                  autoFocus={true}
+                  className="input-super-large spacer-right spacer-top text-middle"
+                  id="generate-token-input"
+                  onChange={[Function]}
+                  required={true}
+                  type="text"
+                  value=""
+                />
+                <SubmitButton
+                  className="text-middle spacer-top"
+                  disabled={true}
+                >
+                  onboarding.token.generate
+                </SubmitButton>
+              </div>
             </form>
           </div>
         </div>
@@ -484,8 +537,6 @@ exports[`revokes token 3`] = `
           values={
             Object {
               "link": <Link
-                onlyActiveOnIndex={false}
-                style={Object {}}
                 target="_blank"
                 to="/account/security"
               >

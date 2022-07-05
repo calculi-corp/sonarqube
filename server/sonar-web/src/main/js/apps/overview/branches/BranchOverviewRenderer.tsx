@@ -18,7 +18,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
-import A11ySkipTarget from '../../../app/components/a11y/A11ySkipTarget';
+import A11ySkipTarget from '../../../components/a11y/A11ySkipTarget';
 import { parseDate } from '../../../helpers/dates';
 import { ProjectAlmBindingResponse } from '../../../types/alm-settings';
 import { ApplicationPeriod } from '../../../types/application';
@@ -29,7 +29,7 @@ import { QualityGateStatus } from '../../../types/quality-gates';
 import { Analysis, Component, MeasureEnhanced, Metric, Period } from '../../../types/types';
 import ActivityPanel from './ActivityPanel';
 import FirstAnalysisNextStepsNotif from './FirstAnalysisNextStepsNotif';
-import { MeasuresPanel } from './MeasuresPanel';
+import MeasuresPanel from './MeasuresPanel';
 import NoCodeWarning from './NoCodeWarning';
 import QualityGatePanel from './QualityGatePanel';
 

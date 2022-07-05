@@ -22,6 +22,7 @@ package org.sonar.db.audit.model;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
 import org.sonar.api.utils.DateUtils;
+import org.sonar.db.user.TokenType;
 import org.sonar.db.user.UserDto;
 import org.sonar.db.user.UserTokenDto;
 
@@ -29,6 +30,7 @@ public class UserTokenNewValue extends NewValue {
   @Nullable
   private String tokenUuid;
 
+  @Nullable
   private String userUuid;
 
   @Nullable
@@ -40,11 +42,19 @@ public class UserTokenNewValue extends NewValue {
   @Nullable
   private Long lastConnectionDate;
 
+  @Nullable
+  private String projectKey;
+
+  @Nullable
+  private String type;
+
   public UserTokenNewValue(UserTokenDto userTokenDto, @Nullable String userLogin) {
     this.tokenUuid = userTokenDto.getUuid();
     this.tokenName = userTokenDto.getName();
     this.userUuid = userTokenDto.getUserUuid();
     this.lastConnectionDate = userTokenDto.getLastConnectionDate();
+    this.projectKey = userTokenDto.getProjectKey();
+    this.type = userTokenDto.getType();
     this.userLogin = userLogin;
   }
 
@@ -56,6 +66,11 @@ public class UserTokenNewValue extends NewValue {
   public UserTokenNewValue(UserDto userDto, String tokenName) {
     this(userDto);
     this.tokenName = tokenName;
+  }
+
+  public UserTokenNewValue(String projectKey) {
+    this.projectKey = projectKey;
+    this.type = TokenType.PROJECT_ANALYSIS_TOKEN.name();
   }
 
   @CheckForNull
@@ -82,6 +97,16 @@ public class UserTokenNewValue extends NewValue {
     return this.lastConnectionDate;
   }
 
+  @CheckForNull
+  public String getProjectKey() {
+    return this.projectKey;
+  }
+
+  @CheckForNull
+  public String getType() {
+    return this.type;
+  }
+
   @Override
   public String toString() {
     StringBuilder sb = new StringBuilder("{");
@@ -89,8 +114,9 @@ public class UserTokenNewValue extends NewValue {
     addField(sb, "\"userUuid\": ", this.userUuid, true);
     addField(sb, "\"userLogin\": ", this.userLogin, true);
     addField(sb, "\"tokenName\": ", this.tokenName, true);
-    addField(sb, "\"lastConnectionDate\": ", this.lastConnectionDate == null ?
-      "" : DateUtils.formatDateTime(this.lastConnectionDate), false);
+    addField(sb, "\"lastConnectionDate\": ", this.lastConnectionDate == null ? "" : DateUtils.formatDateTime(this.lastConnectionDate), false);
+    addField(sb, "\"projectKey\": ", this.projectKey, true);
+    addField(sb, "\"type\": ", this.type, true);
     endString(sb);
     return sb.toString();
   }

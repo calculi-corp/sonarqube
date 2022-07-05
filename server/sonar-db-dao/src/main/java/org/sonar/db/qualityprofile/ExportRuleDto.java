@@ -21,23 +21,24 @@ package org.sonar.db.qualityprofile;
 
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Objects;
 import org.sonar.api.rule.RuleKey;
 import org.sonar.api.rules.RuleType;
 import org.sonar.db.rule.SeverityUtil;
 
 public class ExportRuleDto {
   private String activeRuleUuid = null;
+  private String description = null;
   private String repository = null;
   private String rule = null;
   private String name = null;
-  private String description = null;
   private String extendedDescription = null;
   private String template = null;
   private Integer severity = null;
   private Integer type = null;
   private String tags = null;
 
-  private List<ExportRuleParamDto> params;
+  private List<ExportRuleParamDto> params = null;
 
   public boolean isCustomRule() {
     return template != null;
@@ -71,12 +72,12 @@ public class ExportRuleDto {
     return tags;
   }
 
-  public String getDescription() {
-    return description;
-  }
-
   public String getName() {
     return name;
+  }
+
+  public String getDescriptionOrThrow() {
+    return Objects.requireNonNull(description, "description is expected to be set but it is null");
   }
 
   public List<ExportRuleParamDto> getParams() {
@@ -89,4 +90,5 @@ public class ExportRuleDto {
   void setParams(List<ExportRuleParamDto> params) {
     this.params = params;
   }
+
 }

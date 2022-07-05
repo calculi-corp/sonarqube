@@ -35,12 +35,11 @@ public class UserNewValueTest {
     userDto.setName("name");
     userDto.setEmail("name@email.com");
     userDto.setActive(true);
-    userDto.setScmAccounts("github-account");
+    userDto.setScmAccounts("\ngithub-account\n");
     userDto.setExternalId("name");
     userDto.setExternalLogin("name");
     userDto.setExternalIdentityProvider("github");
     userDto.setLocal(false);
-    userDto.setOnboarded(true);
     userDto.setLastConnectionDate(System.currentTimeMillis());
     UserNewValue userNewValue = new UserNewValue(userDto);
 

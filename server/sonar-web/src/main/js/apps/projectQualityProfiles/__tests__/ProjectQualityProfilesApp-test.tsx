@@ -29,7 +29,7 @@ import {
 import handleRequiredAuthorization from '../../../app/utils/handleRequiredAuthorization';
 import { mockComponent } from '../../../helpers/mocks/component';
 import { waitAndUpdate } from '../../../helpers/testUtils';
-import ProjectQualityProfilesApp from '../ProjectQualityProfilesApp';
+import { ProjectQualityProfilesApp } from '../ProjectQualityProfilesApp';
 
 jest.mock('../../../api/quality-profiles', () => {
   const { mockQualityProfile } = jest.requireActual('../../../helpers/testMocks');
@@ -71,7 +71,7 @@ jest.mock('../../../api/quality-profiles', () => {
   };
 });
 
-jest.mock('../../../app/utils/globalMessagesService', () => ({
+jest.mock('../../../helpers/globalMessages', () => ({
   addGlobalSuccessMessage: jest.fn()
 }));
 

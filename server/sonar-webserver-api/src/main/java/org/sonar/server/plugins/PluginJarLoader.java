@@ -19,7 +19,6 @@
  */
 package org.sonar.server.plugins;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
 import java.io.File;
 import java.io.IOException;
@@ -27,21 +26,20 @@ import java.nio.file.Path;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import javax.inject.Inject;
 import org.apache.commons.io.FileUtils;
-import org.sonar.api.SonarRuntime;
 import org.sonar.api.utils.MessageException;
 import org.sonar.api.utils.log.Logger;
 import org.sonar.api.utils.log.Loggers;
 import org.sonar.core.platform.PluginInfo;
+import org.sonar.core.platform.SonarQubeVersion;
 import org.sonar.server.platform.ServerFileSystem;
-import org.sonar.updatecenter.common.Version;
 
 import static java.lang.String.format;
 import static org.apache.commons.io.FileUtils.moveFile;
@@ -49,8 +47,6 @@ import static org.sonar.core.util.FileUtils.deleteQuietly;
 import static org.sonar.server.log.ServerProcessLogging.STARTUP_LOGGER_NAME;
 import static org.sonar.server.plugins.PluginType.BUNDLED;
 import static org.sonar.server.plugins.PluginType.EXTERNAL;
-
-import javax.inject.Inject;
 
 public class PluginJarLoader {
   private static final Logger LOG = Loggers.get(PluginJarLoader.class);
@@ -64,17 +60,17 @@ public class PluginJarLoader {
   private static final String LOAD_ERROR_GENERIC_MESSAGE = "Startup failed: Plugins can't be loaded. See web logs for more information";
 
   private final ServerFileSystem fs;
-  private final SonarRuntime runtime;
+  private final SonarQubeVersion sonarQubeVersion;
   private final Set<String> blacklistedPluginKeys;
 
   @Inject
-  public PluginJarLoader(ServerFileSystem fs, SonarRuntime runtime) {
-    this(fs, runtime, DEFAULT_BLACKLISTED_PLUGINS);
+  public PluginJarLoader(ServerFileSystem fs, SonarQubeVersion sonarQubeVersion) {
+    this(fs, sonarQubeVersion, DEFAULT_BLACKLISTED_PLUGINS);
   }
 
-  PluginJarLoader(ServerFileSystem fs, SonarRuntime runtime, Set<String> blacklistedPluginKeys) {
+  PluginJarLoader(ServerFileSystem fs, SonarQubeVersion sonarQubeVersion, Set<String> blacklistedPluginKeys) {
     this.fs = fs;
-    this.runtime = runtime;
+    this.sonarQubeVersion = sonarQubeVersion;
     this.blacklistedPluginKeys = blacklistedPluginKeys;
   }
 
@@ -124,56 +120,9 @@ public class PluginJarLoader {
     plugins.putAll(externalPluginsByKey);
     plugins.putAll(bundledPluginsByKey);
 
-    unloadIncompatiblePlugins(plugins);
+    PluginRequirementsValidator.unloadIncompatiblePlugins(plugins);
 
     return plugins.values();
-  }
-
-  /**
-   * Removes the plugins that are not compatible with current environment.
-   */
-  private static void unloadIncompatiblePlugins(Map<String, ServerPluginInfo> pluginsByKey) {
-    // loop as long as the previous loop ignored some plugins. That allows to support dependencies
-    // on many levels, for example D extends C, which extends B, which requires A. If A is not installed,
-    // then B, C and D must be ignored. That's not possible to achieve this algorithm with a single iteration over plugins.
-    Set<String> removedKeys = new HashSet<>();
-    do {
-      removedKeys.clear();
-      for (ServerPluginInfo plugin : pluginsByKey.values()) {
-        if (!isCompatible(plugin, pluginsByKey)) {
-          removedKeys.add(plugin.getKey());
-        }
-      }
-      for (String removedKey : removedKeys) {
-        pluginsByKey.remove(removedKey);
-      }
-    } while (!removedKeys.isEmpty());
-  }
-
-  @VisibleForTesting
-  static boolean isCompatible(ServerPluginInfo plugin, Map<String, ServerPluginInfo> allPluginsByKeys) {
-    if (!Strings.isNullOrEmpty(plugin.getBasePlugin()) && !allPluginsByKeys.containsKey(plugin.getBasePlugin())) {
-      // it extends a plugin that is not installed
-      LOG.warn("Plugin {} [{}] is ignored because its base plugin [{}] is not installed", plugin.getName(), plugin.getKey(), plugin.getBasePlugin());
-      return false;
-    }
-
-    for (PluginInfo.RequiredPlugin requiredPlugin : plugin.getRequiredPlugins()) {
-      PluginInfo installedRequirement = allPluginsByKeys.get(requiredPlugin.getKey());
-      if (installedRequirement == null) {
-        // it requires a plugin that is not installed
-        LOG.warn("Plugin {} [{}] is ignored because the required plugin [{}] is not installed", plugin.getName(), plugin.getKey(), requiredPlugin.getKey());
-        return false;
-      }
-      Version installedRequirementVersion = installedRequirement.getVersion();
-      if (installedRequirementVersion != null && requiredPlugin.getMinimalVersion().compareToIgnoreQualifier(installedRequirementVersion) > 0) {
-        // it requires a more recent version
-        LOG.warn("Plugin {} [{}] is ignored because the version {} of required plugin [{}] is not installed", plugin.getName(), plugin.getKey(),
-          requiredPlugin.getMinimalVersion(), requiredPlugin.getKey());
-        return false;
-      }
-    }
-    return true;
   }
 
   private static String getRelativeDir(File dir) {
@@ -262,7 +211,7 @@ public class PluginJarLoader {
       return false;
     }
 
-    if (!info.isCompatibleWith(runtime.getApiVersion().toString())) {
+    if (!info.isCompatibleWith(sonarQubeVersion.get().toString())) {
       throw MessageException.of(format("Plugin %s [%s] requires at least SonarQube %s", info.getName(), info.getKey(), info.getMinimalSqVersion()));
     }
     return true;

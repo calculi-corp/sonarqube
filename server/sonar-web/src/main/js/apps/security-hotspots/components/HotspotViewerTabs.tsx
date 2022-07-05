@@ -17,17 +17,21 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import classNames from 'classnames';
+import { groupBy } from 'lodash';
 import * as React from 'react';
 import BoxedTabs from '../../../components/controls/BoxedTabs';
-import { KeyboardCodes } from '../../../helpers/keycodes';
+import { isInput, isShortcut } from '../../../helpers/keyboardEventHelpers';
+import { KeyboardKeys } from '../../../helpers/keycodes';
 import { translate } from '../../../helpers/l10n';
 import { sanitizeString } from '../../../helpers/sanitize';
 import { Hotspot } from '../../../types/security-hotspots';
+import RuleContextDescription from '../../../components/rules/RuleContextDescription';
+import { RuleDescriptionSection, RuleDescriptionSections } from '../../coding-rules/rule';
 
 interface Props {
   codeTabContent: React.ReactNode;
   hotspot: Hotspot;
+  ruleDescriptionSections?: RuleDescriptionSection[];
   selectedHotspotLocation?: number;
 }
 
@@ -39,7 +43,7 @@ interface State {
 interface Tab {
   key: TabKeys;
   label: React.ReactNode;
-  content: string;
+  descriptionSections: RuleDescriptionSection[];
 }
 
 export enum TabKeys {
@@ -86,21 +90,24 @@ export default class HotspotViewerTabs extends React.PureComponent<Props, State>
   }
 
   handleKeyboardNavigation = (event: KeyboardEvent) => {
-    if (event.code === KeyboardCodes.LeftArrow) {
+    if (isInput(event) || isShortcut(event)) {
+      return true;
+    }
+    if (event.key === KeyboardKeys.LeftArrow) {
       event.preventDefault();
       this.selectNeighboringTab(-1);
-    } else if (event.code === KeyboardCodes.RightArrow) {
+    } else if (event.key === KeyboardKeys.RightArrow) {
       event.preventDefault();
       this.selectNeighboringTab(+1);
     }
   };
 
   registerKeyboardEvents() {
-    window.addEventListener('keydown', this.handleKeyboardNavigation);
+    document.addEventListener('keydown', this.handleKeyboardNavigation);
   }
 
   unregisterKeyboardEvents() {
-    window.removeEventListener('keydown', this.handleKeyboardNavigation);
+    document.removeEventListener('keydown', this.handleKeyboardNavigation);
   }
 
   handleSelectTabs = (tabKey: TabKeys) => {
@@ -110,31 +117,34 @@ export default class HotspotViewerTabs extends React.PureComponent<Props, State>
   };
 
   computeTabs() {
-    const { hotspot } = this.props;
+    const { ruleDescriptionSections } = this.props;
+    const groupedDescriptions = groupBy(ruleDescriptionSections, description => description.key);
 
     const descriptionTabs = [
       {
         key: TabKeys.RiskDescription,
         label: translate('hotspots.tabs.risk_description'),
-        content: hotspot.rule.riskDescription || ''
+        descriptionSections:
+          groupedDescriptions[RuleDescriptionSections.DEFAULT] ||
+          groupedDescriptions[RuleDescriptionSections.ROOT_CAUSE]
       },
       {
         key: TabKeys.VulnerabilityDescription,
         label: translate('hotspots.tabs.vulnerability_description'),
-        content: hotspot.rule.vulnerabilityDescription || ''
+        descriptionSections: groupedDescriptions[RuleDescriptionSections.ASSESS_THE_PROBLEM]
       },
       {
         key: TabKeys.FixRecommendation,
         label: translate('hotspots.tabs.fix_recommendations'),
-        content: hotspot.rule.fixRecommendations || ''
+        descriptionSections: groupedDescriptions[RuleDescriptionSections.HOW_TO_FIX]
       }
-    ].filter(tab => tab.content.length > 0);
+    ].filter(tab => tab.descriptionSections);
 
     return [
       {
         key: TabKeys.Code,
         label: translate('hotspots.tabs.code'),
-        content: ''
+        descriptionSections: []
       },
       ...descriptionTabs
     ];
@@ -158,27 +168,27 @@ export default class HotspotViewerTabs extends React.PureComponent<Props, State>
   render() {
     const { codeTabContent } = this.props;
     const { tabs, currentTab } = this.state;
-
     return (
       <>
         <BoxedTabs onSelect={this.handleSelectTabs} selected={currentTab.key} tabs={tabs} />
         <div className="bordered huge-spacer-bottom">
-          <div
-            className={classNames('padded', {
-              hidden: currentTab.key !== TabKeys.Code
-            })}>
-            {codeTabContent}
-          </div>
-          {tabs.slice(1).map(tab => (
-            <div
-              key={tab.key}
-              className={classNames('markdown big-padded', {
-                hidden: currentTab.key !== tab.key
-              })}
-              // eslint-disable-next-line react/no-danger
-              dangerouslySetInnerHTML={{ __html: sanitizeString(currentTab.content) }}
-            />
-          ))}
+          {currentTab.key === TabKeys.Code && <div className="padded">{codeTabContent}</div>}
+          {currentTab.key !== TabKeys.Code &&
+            (currentTab.descriptionSections.length === 1 &&
+            !currentTab.descriptionSections[0].context ? (
+              <div
+                key={currentTab.key}
+                className="markdown big-padded"
+                // eslint-disable-next-line react/no-danger
+                dangerouslySetInnerHTML={{
+                  __html: sanitizeString(currentTab.descriptionSections[0].content)
+                }}
+              />
+            ) : (
+              <div className="markdown big-padded">
+                <RuleContextDescription description={currentTab.descriptionSections} />
+              </div>
+            ))}
         </div>
       </>
     );

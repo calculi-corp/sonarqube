@@ -23,7 +23,6 @@ import java.time.Clock;
 import java.util.Properties;
 import org.sonar.api.SonarEdition;
 import org.sonar.api.SonarQubeSide;
-import org.sonar.api.SonarQubeVersion;
 import org.sonar.api.internal.MetadataLoader;
 import org.sonar.api.internal.SonarRuntimeImpl;
 import org.sonar.api.utils.System2;
@@ -31,6 +30,7 @@ import org.sonar.api.utils.Version;
 import org.sonar.core.config.CorePropertyDefinitions;
 import org.sonar.core.extension.CoreExtensionRepositoryImpl;
 import org.sonar.core.extension.CoreExtensionsLoader;
+import org.sonar.core.platform.SonarQubeVersion;
 import org.sonar.core.util.UuidFactoryImpl;
 import org.sonar.db.DBSessionsImpl;
 import org.sonar.db.DaoModule;
@@ -88,11 +88,12 @@ public class PlatformLevel1 extends PlatformLevel {
   public void configureLevel() {
     add(platform, properties);
     addExtraRootComponents();
-    Version apiVersion = MetadataLoader.loadVersion(System2.INSTANCE);
+    Version apiVersion = MetadataLoader.loadApiVersion(System2.INSTANCE);
+    Version sqVersion = MetadataLoader.loadSQVersion(System2.INSTANCE);
     SonarEdition edition = MetadataLoader.loadEdition(System2.INSTANCE);
 
     add(
-      new SonarQubeVersion(apiVersion),
+      new SonarQubeVersion(sqVersion),
       SonarRuntimeImpl.forSonarQube(apiVersion, SonarQubeSide.SERVER, edition),
       ThreadLocalSettings.class,
       ConfigurationProvider.class,

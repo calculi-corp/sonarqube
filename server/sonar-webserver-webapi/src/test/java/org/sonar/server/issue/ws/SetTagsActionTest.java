@@ -38,7 +38,7 @@ import org.sonar.db.DbClient;
 import org.sonar.db.DbTester;
 import org.sonar.db.component.ComponentDto;
 import org.sonar.db.issue.IssueDto;
-import org.sonar.db.rule.RuleDefinitionDto;
+import org.sonar.db.rule.RuleDto;
 import org.sonar.db.user.UserDto;
 import org.sonar.server.es.EsTester;
 import org.sonar.server.exceptions.ForbiddenException;
@@ -53,6 +53,7 @@ import org.sonar.server.issue.index.IssueIteratorFactory;
 import org.sonar.server.issue.notification.IssuesChangesNotificationSerializer;
 import org.sonar.server.notification.NotificationManager;
 import org.sonar.server.rule.DefaultRuleFinder;
+import org.sonar.server.rule.RuleDescriptionFormatter;
 import org.sonar.server.tester.UserSessionRule;
 import org.sonar.server.ws.TestRequest;
 import org.sonar.server.ws.TestResponse;
@@ -90,7 +91,7 @@ public class SetTagsActionTest {
 
   private WsActionTester ws = new WsActionTester(new SetTagsAction(userSession, dbClient, new IssueFinder(dbClient, userSession), new IssueFieldsSetter(),
     new IssueUpdater(dbClient,
-      new WebIssueStorage(system2, dbClient, new DefaultRuleFinder(dbClient), issueIndexer, new SequenceUuidFactory()),
+      new WebIssueStorage(system2, dbClient, new DefaultRuleFinder(dbClient, mock(RuleDescriptionFormatter.class)), issueIndexer, new SequenceUuidFactory()),
       mock(NotificationManager.class), issueChangePostProcessor, issuesChangesSerializer),
     responseWriter));
 
@@ -194,7 +195,7 @@ public class SetTagsActionTest {
 
   @Test
   public void fail_when_security_hotspot() {
-    RuleDefinitionDto rule = db.rules().insertHotspotRule();
+    RuleDto rule = db.rules().insertHotspotRule();
     ComponentDto project = db.components().insertPublicProject(newPublicProjectDto());
     ComponentDto file = db.components().insertComponent(newFileDto(project));
     IssueDto issueDto = db.issues().insertHotspot(rule, project, file);
@@ -226,7 +227,7 @@ public class SetTagsActionTest {
 
   @SafeVarargs
   private final IssueDto insertIssueForPublicProject(Consumer<IssueDto>... consumers) {
-    RuleDefinitionDto rule = db.rules().insertIssueRule();
+    RuleDto rule = db.rules().insertIssueRule();
     ComponentDto project = db.components().insertPublicProject(newPublicProjectDto());
     ComponentDto file = db.components().insertComponent(newFileDto(project));
     return db.issues().insertIssue(rule, project, file, consumers);
@@ -261,7 +262,7 @@ public class SetTagsActionTest {
       .extracting(IssueDto::getKey)
       .containsOnly(issue.getKey());
     assertThat(preloadedSearchResponseData.getRules())
-      .extracting(RuleDefinitionDto::getKey)
+      .extracting(RuleDto::getKey)
       .containsOnly(issue.getRuleKey());
     assertThat(preloadedSearchResponseData.getComponents())
       .extracting(ComponentDto::uuid)

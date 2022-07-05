@@ -19,7 +19,7 @@
  */
 package org.sonar.server.rule;
 
-import com.google.common.collect.ImmutableSet;
+import java.util.Set;
 import org.junit.Before;
 import org.junit.Test;
 import org.sonar.api.rule.RuleKey;
@@ -30,12 +30,13 @@ import org.sonar.api.utils.System2;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.DbTester;
-import org.sonar.db.rule.RuleDefinitionDto;
 import org.sonar.db.rule.RuleDto;
 import org.sonar.db.rule.RuleDto.Scope;
 
+import static java.util.Collections.emptySet;
 import static org.apache.commons.lang.RandomStringUtils.randomAlphanumeric;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 public class DefaultRuleFinderTest {
 
@@ -81,14 +82,14 @@ public class DefaultRuleFinderTest {
     .setScope(Scope.MAIN)
     .setStatus(RuleStatus.READY);
 
-  private final DefaultRuleFinder underTest = new DefaultRuleFinder(dbClient);
+  private final DefaultRuleFinder underTest = new DefaultRuleFinder(dbClient, mock(RuleDescriptionFormatter.class));
 
   @Before
   public void setup() {
-    dbTester.rules().insertRule(rule1);
-    dbTester.rules().insertRule(rule2);
-    dbTester.rules().insertRule(rule3);
-    dbTester.rules().insertRule(rule4);
+    dbTester.rules().insert(rule1);
+    dbTester.rules().insert(rule2);
+    dbTester.rules().insert(rule3);
+    dbTester.rules().insert(rule4);
     session.commit();
   }
 
@@ -111,7 +112,7 @@ public class DefaultRuleFinderTest {
     assertThat(underTest.findAll(RuleQuery.create())).extracting(Rule::ruleKey).containsOnly(rule1.getKey(), rule3.getKey(), rule4.getKey());
 
     // find_all
-    assertThat(underTest.findAll()).extracting(RuleDefinitionDto::getRuleKey).containsOnly(rule1.getKey().rule(), rule3.getKey().rule(), rule4.getKey().rule());
+    assertThat(underTest.findAll()).extracting(RuleDto::getRuleKey).containsOnly(rule1.getKey().rule(), rule3.getKey().rule(), rule4.getKey().rule());
 
     // do_not_find_disabled_rules
     assertThat(underTest.findByKey("checkstyle", "DisabledCheck")).isNull();
@@ -133,23 +134,23 @@ public class DefaultRuleFinderTest {
   public void find_all_not_include_removed_rule() {
     // rule 3 is REMOVED
     assertThat(underTest.findAll(RuleQuery.create())).extracting(Rule::ruleKey).containsOnly(rule1.getKey(), rule3.getKey(), rule4.getKey());
-    assertThat(underTest.findAll()).extracting(RuleDefinitionDto::getRuleKey).containsOnly(rule1.getKey().rule(), rule3.getKey().rule(), rule4.getKey().rule());
+    assertThat(underTest.findAll()).extracting(RuleDto::getRuleKey).containsOnly(rule1.getKey().rule(), rule3.getKey().rule(), rule4.getKey().rule());
   }
 
   @Test
   public void findByKey_populates_system_tags_but_not_tags() {
-    RuleDefinitionDto ruleDefinition = dbTester.rules()
-      .insert(t -> t.setSystemTags(ImmutableSet.of(randomAlphanumeric(5), randomAlphanumeric(6))));
+    RuleDto ruleDto = dbTester.rules()
+      .insert(t -> t.setSystemTags(Set.of(randomAlphanumeric(5), randomAlphanumeric(6))).setTags(emptySet()));
     dbTester.rules().insertRule();
 
-    Rule rule = underTest.findByKey(ruleDefinition.getKey());
+    Rule rule = underTest.findByKey(ruleDto.getKey());
     assertThat(rule.getSystemTags())
-      .containsOnlyElementsOf(ruleDefinition.getSystemTags());
+      .containsOnlyElementsOf(ruleDto.getSystemTags());
     assertThat(rule.getTags()).isEmpty();
 
-    rule = underTest.findByKey(ruleDefinition.getRepositoryKey(), ruleDefinition.getRuleKey());
+    rule = underTest.findByKey(ruleDto.getRepositoryKey(), ruleDto.getRuleKey());
     assertThat(rule.getSystemTags())
-      .containsOnlyElementsOf(ruleDefinition.getSystemTags());
+      .containsOnlyElementsOf(ruleDto.getSystemTags());
     assertThat(rule.getTags()).isEmpty();
   }
 }

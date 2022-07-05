@@ -19,7 +19,7 @@
  */
 import classNames from 'classnames';
 import * as React from 'react';
-import { Link } from 'react-router';
+import { Link } from 'react-router-dom';
 import { ButtonIcon } from '../../components/controls/buttons';
 import { ClipboardIconButton } from '../../components/controls/clipboard';
 import ExpandSnippetIcon from '../../components/icons/ExpandSnippetIcon';
@@ -54,7 +54,7 @@ export default function SourceViewerHeaderSlim(props: Props) {
     onExpand,
     sourceViewerFile
   } = props;
-  const { measures, path, project, projectName, q, subProject, subProjectName } = sourceViewerFile;
+  const { measures, path, project, projectName, q } = sourceViewerFile;
 
   const projectNameLabel = (
     <>
@@ -79,13 +79,6 @@ export default function SourceViewerHeaderSlim(props: Props) {
               projectNameLabel
             )}
           </div>
-        )}
-
-        {subProject !== undefined && (
-          <>
-            <QualifierIcon qualifier={ComponentQualifier.SubProject} />{' '}
-            <span className="spacer-right">{subProjectName}</span>
-          </>
         )}
 
         {!isProjectRoot && (

@@ -19,7 +19,7 @@
  */
 import * as React from 'react';
 import { FormattedMessage } from 'react-intl';
-import { Link } from 'react-router';
+import { Link } from 'react-router-dom';
 import { components, OptionProps, SingleValueProps } from 'react-select';
 import { Button, SubmitButton } from '../../../../components/controls/buttons';
 import Select from '../../../../components/controls/Select';
@@ -36,7 +36,7 @@ import {
   ProjectAlmBindingConfigurationErrorScope,
   ProjectAlmBindingResponse
 } from '../../../../types/alm-settings';
-import { ALM_INTEGRATION } from '../AdditionalCategoryKeys';
+import { ALM_INTEGRATION_CATEGORY } from '../../constants';
 import AlmSpecificForm from './AlmSpecificForm';
 
 export interface PRDecorationBindingRendererProps {
@@ -105,7 +105,7 @@ export default function PRDecorationBindingRenderer(props: PRDecorationBindingRe
               id="settings.pr_decoration.binding.no_bindings.admin"
               values={{
                 link: (
-                  <Link to={getGlobalSettingsUrl(ALM_INTEGRATION)}>
+                  <Link to={getGlobalSettingsUrl(ALM_INTEGRATION_CATEGORY)}>
                     {translate('settings.pr_decoration.binding.no_bindings.link')}
                   </Link>
                 )
@@ -223,7 +223,7 @@ export default function PRDecorationBindingRenderer(props: PRDecorationBindingRe
                     )}
                     values={{
                       link: (
-                        <Link to={getGlobalSettingsUrl(ALM_INTEGRATION, { alm })}>
+                        <Link to={getGlobalSettingsUrl(ALM_INTEGRATION_CATEGORY, { alm })}>
                           {translate(
                             'settings.pr_decoration.binding.check_configuration.failure.check_global_settings.link'
                           )}

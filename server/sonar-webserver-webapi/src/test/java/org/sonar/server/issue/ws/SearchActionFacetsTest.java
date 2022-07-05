@@ -34,7 +34,7 @@ import org.sonar.api.utils.Durations;
 import org.sonar.api.utils.System2;
 import org.sonar.db.DbTester;
 import org.sonar.db.component.ComponentDto;
-import org.sonar.db.rule.RuleDefinitionDto;
+import org.sonar.db.rule.RuleDto;
 import org.sonar.db.user.UserDto;
 import org.sonar.server.es.EsTester;
 import org.sonar.server.issue.AvatarResolverImpl;
@@ -96,7 +96,7 @@ public class SearchActionFacetsTest {
     ComponentDto project = db.components().insertPublicProject();
     ComponentDto module = db.components().insertComponent(newModuleDto(project));
     ComponentDto file = db.components().insertComponent(newFileDto(module));
-    RuleDefinitionDto rule = db.rules().insertIssueRule();
+    RuleDto rule = db.rules().insertIssueRule();
     UserDto user = db.users().insertUser();
     db.issues().insertIssue(rule, project, file, i -> i
       .setSeverity("MAJOR")
@@ -109,7 +109,7 @@ public class SearchActionFacetsTest {
 
     SearchWsResponse response = ws.newRequest()
       .setParam(PARAM_COMPONENT_KEYS, project.getKey())
-      .setParam(FACETS, "severities,statuses,resolutions,rules,types,languages,projects,moduleUuids,files,assignees")
+      .setParam(FACETS, "severities,statuses,resolutions,rules,types,languages,projects,files,assignees")
       .executeProtobuf(SearchWsResponse.class);
 
     Map<String, Number> expectedStatuses = ImmutableMap.<String, Number>builder().put("OPEN", 1L).put("CONFIRMED", 0L)
@@ -125,7 +125,6 @@ public class SearchActionFacetsTest {
         tuple("types", of("CODE_SMELL", 1L, "BUG", 0L, "VULNERABILITY", 0L)),
         tuple("languages", of(rule.getLanguage(), 1L)),
         tuple("projects", of(project.getKey(), 1L)),
-        tuple("moduleUuids", of(module.uuid(), 1L)),
         tuple("files", of(file.path(), 1L)),
         tuple("assignees", of("", 0L, user.getLogin(), 1L)));
   }
@@ -134,7 +133,7 @@ public class SearchActionFacetsTest {
   public void display_projects_facet() {
     ComponentDto project = db.components().insertPublicProject();
     ComponentDto file = db.components().insertComponent(newFileDto(project));
-    RuleDefinitionDto rule = db.rules().insertIssueRule();
+    RuleDto rule = db.rules().insertIssueRule();
     db.issues().insertIssue(rule, project, file);
     indexPermissions();
     indexIssues();
@@ -157,7 +156,7 @@ public class SearchActionFacetsTest {
     ComponentDto file1 = db.components().insertComponent(newFileDto(project1));
     ComponentDto file2 = db.components().insertComponent(newFileDto(project2));
     ComponentDto file3 = db.components().insertComponent(newFileDto(project3));
-    RuleDefinitionDto rule = db.rules().insertIssueRule();
+    RuleDto rule = db.rules().insertIssueRule();
     db.issues().insertIssue(rule, project1, file1);
     db.issues().insertIssue(rule, project2, file2);
     db.issues().insertIssue(rule, project3, file3);
@@ -179,7 +178,7 @@ public class SearchActionFacetsTest {
     ComponentDto project = db.components().insertPublicProject();
     ComponentDto directory = db.components().insertComponent(newDirectory(project, "src/main/java/dir"));
     ComponentDto file = db.components().insertComponent(newFileDto(project, directory));
-    RuleDefinitionDto rule = db.rules().insertIssueRule();
+    RuleDto rule = db.rules().insertIssueRule();
     db.issues().insertIssue(rule, project, file);
     indexPermissions();
     indexIssues();
@@ -200,7 +199,7 @@ public class SearchActionFacetsTest {
     ComponentDto project = db.components().insertPublicProject();
     ComponentDto directory = db.components().insertComponent(newDirectory(project, "src"));
     ComponentDto file = db.components().insertComponent(newFileDto(project, directory));
-    RuleDefinitionDto rule = db.rules().insertIssueRule();
+    RuleDto rule = db.rules().insertIssueRule();
     db.issues().insertIssue(rule, project, file);
     indexPermissions();
     indexIssues();
@@ -220,7 +219,7 @@ public class SearchActionFacetsTest {
     ComponentDto file1 = db.components().insertComponent(newFileDto(project));
     ComponentDto file2 = db.components().insertComponent(newFileDto(project));
     ComponentDto file3 = db.components().insertComponent(newFileDto(project));
-    RuleDefinitionDto rule = db.rules().insertIssueRule();
+    RuleDto rule = db.rules().insertIssueRule();
     db.issues().insertIssue(rule, project, file1);
     db.issues().insertIssue(rule, project, file2);
     indexPermissions();
@@ -241,7 +240,7 @@ public class SearchActionFacetsTest {
   public void fail_to_display_fileUuids_facet_when_no_project_is_set() {
     ComponentDto project = db.components().insertPublicProject();
     ComponentDto file = db.components().insertComponent(newFileDto(project));
-    RuleDefinitionDto rule = db.rules().insertIssueRule();
+    RuleDto rule = db.rules().insertIssueRule();
     db.issues().insertIssue(rule, project, file);
     indexPermissions();
     indexIssues();
@@ -267,7 +266,7 @@ public class SearchActionFacetsTest {
         ComponentDto directory = db.components().insertComponent(newDirectory(module, "dir" + index));
         ComponentDto file = db.components().insertComponent(newFileDto(directory));
 
-        RuleDefinitionDto rule = db.rules().insertIssueRule();
+        RuleDto rule = db.rules().insertIssueRule();
         db.issues().insertIssue(rule, project, file, i -> i.setAssigneeUuid(user.getUuid())
           .setStatus(ISSUE_STATUSES[random.nextInt(ISSUE_STATUSES.length)])
           .setType(rule.getType()));
@@ -290,7 +289,7 @@ public class SearchActionFacetsTest {
 
     SearchWsResponse response = ws.newRequest()
       .setParam(PARAM_COMPONENT_KEYS, project.getKey())
-      .setParam(FACETS, "files,directories,moduleUuids,statuses,resolutions,severities,types,rules,languages,assignees")
+      .setParam(FACETS, "files,directories,statuses,resolutions,severities,types,rules,languages,assignees")
       .executeProtobuf(SearchWsResponse.class);
 
     assertThat(response.getFacets().getFacetsList())
@@ -298,7 +297,6 @@ public class SearchActionFacetsTest {
       .containsExactlyInAnyOrder(
         tuple("files", 100),
         tuple("directories", 100),
-        tuple("moduleUuids", 100),
         tuple("rules", 100),
         tuple("languages", 100),
         // Assignees contains one additional element : it's the empty string that will return number of unassigned issues
@@ -312,7 +310,7 @@ public class SearchActionFacetsTest {
 
   @Test
   public void check_projects_facet_max_size() {
-    RuleDefinitionDto rule = db.rules().insertIssueRule();
+    RuleDto rule = db.rules().insertIssueRule();
     IntStream.rangeClosed(1, 110)
       .forEach(i -> {
         ComponentDto project = db.components().insertPublicProject();
@@ -337,8 +335,8 @@ public class SearchActionFacetsTest {
     ComponentDto project2 = db.components().insertPublicProject();
     ComponentDto file1 = db.components().insertComponent(newFileDto(module1));
     ComponentDto file2 = db.components().insertComponent(newFileDto(module1));
-    RuleDefinitionDto rule1 = db.rules().insertIssueRule();
-    RuleDefinitionDto rule2 = db.rules().insertIssueRule();
+    RuleDto rule1 = db.rules().insertIssueRule();
+    RuleDto rule2 = db.rules().insertIssueRule();
     UserDto user1 = db.users().insertUser();
     UserDto user2 = db.users().insertUser();
     db.issues().insertIssue(rule1, project1, file1, i -> i
@@ -358,7 +356,7 @@ public class SearchActionFacetsTest {
       .setParam("severities", "MAJOR,MINOR")
       .setParam("languages", rule1.getLanguage() + "," + rule2.getLanguage())
       .setParam("assignees", user1.getLogin() + "," + user2.getLogin())
-      .setParam(FACETS, "severities,statuses,resolutions,rules,types,languages,projects,moduleUuids,files,assignees")
+      .setParam(FACETS, "severities,statuses,resolutions,rules,types,languages,projects,files,assignees")
       .executeProtobuf(SearchWsResponse.class);
 
     Map<String, Number> expectedStatuses = ImmutableMap.<String, Number>builder().put("OPEN", 1L).put("CONFIRMED", 0L)
@@ -374,7 +372,6 @@ public class SearchActionFacetsTest {
         tuple("types", of("CODE_SMELL", 1L, "BUG", 0L, "VULNERABILITY", 0L)),
         tuple("languages", of(rule1.getLanguage(), 1L, rule2.getLanguage(), 0L)),
         tuple("projects", of(project1.getKey(), 1L, project2.getKey(), 0L)),
-        tuple("moduleUuids", of(module1.uuid(), 1L)),
         tuple("files", of(file1.path(), 1L, file2.path(), 0L)),
         tuple("assignees", of("", 0L, user1.getLogin(), 1L, user2.getLogin(), 0L)));
   }
@@ -401,7 +398,7 @@ public class SearchActionFacetsTest {
     ComponentDto project = db.components().insertPublicProject();
     indexPermissions();
     ComponentDto file = db.components().insertComponent(newFileDto(project));
-    RuleDefinitionDto rule = db.rules().insertIssueRule();
+    RuleDto rule = db.rules().insertIssueRule();
     UserDto john = db.users().insertUser();
     UserDto alice = db.users().insertUser();
     db.issues().insertIssue(rule, project, file, i -> i.setAssigneeUuid(john.getUuid()));

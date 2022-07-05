@@ -43,9 +43,7 @@ import org.sonar.db.component.BranchType;
 import org.sonar.db.component.ComponentDto;
 import org.sonar.db.issue.IssueDto;
 import org.sonar.db.project.ProjectDto;
-import org.sonar.db.rule.RuleDefinitionDto;
 import org.sonar.db.rule.RuleDto;
-import org.sonar.db.rule.RuleMetadataDto;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -210,7 +208,7 @@ public class ExportAdHocRulesStepTest {
 
   private RuleDto insertRule(RuleKey ruleKey, boolean isExternal, boolean isAdHoc) {
     dbTester.rules().insert(
-      new RuleDefinitionDto()
+      new RuleDto()
         .setRuleKey(ruleKey)
         .setIsExternal(isExternal)
         .setIsAdHoc(isAdHoc)
@@ -221,10 +219,4 @@ public class ExportAdHocRulesStepTest {
       .orElseThrow(() -> new RuntimeException("insertAdHocRule failed"));
   }
 
-  private void insertRuleMetadata(String ruleUuid, String adHocName) {
-    dbTester.rules().insertOrUpdateMetadata(new RuleMetadataDto()
-      .setRuleUuid(ruleUuid)
-      .setAdHocName(adHocName));
-    dbTester.commit();
-  }
 }

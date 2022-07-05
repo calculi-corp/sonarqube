@@ -101,7 +101,7 @@ public class ReportPublisherTest {
     underTest.start();
     underTest.execute();
 
-    verify(wsClient).call(argThat(req -> req.getWriteTimeOutInMs().orElse(0) == 30_000));
+    verify(wsClient).call(argThat(req -> (req).getWriteTimeOutInMs().orElse(0) == 30_000));
   }
 
   @Test

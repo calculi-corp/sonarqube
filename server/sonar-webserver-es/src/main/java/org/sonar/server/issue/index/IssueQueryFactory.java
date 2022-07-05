@@ -50,7 +50,7 @@ import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.component.ComponentDto;
 import org.sonar.db.component.SnapshotDto;
-import org.sonar.db.rule.RuleDefinitionDto;
+import org.sonar.db.rule.RuleDto;
 import org.sonar.server.issue.SearchRequest;
 import org.sonar.server.issue.index.IssueQuery.PeriodStart;
 import org.sonar.server.user.UserSession;
@@ -112,10 +112,10 @@ public class IssueQueryFactory {
     try (DbSession dbSession = dbClient.openSession(false)) {
       final ZoneId timeZone = parseTimeZone(request.getTimeZone()).orElse(clock.getZone());
 
-      Collection<RuleDefinitionDto> ruleDefinitionDtos = ruleKeysToRuleId(dbSession, request.getRules());
-      Collection<String> ruleUuids = ruleDefinitionDtos.stream().map(RuleDefinitionDto::getUuid).collect(Collectors.toSet());
+      Collection<RuleDto> ruleDtos = ruleKeysToRuleId(dbSession, request.getRules());
+      Collection<String> ruleUuids = ruleDtos.stream().map(RuleDto::getUuid).collect(Collectors.toSet());
 
-      if (request.getRules() != null && request.getRules().stream().collect(toSet()).size() != ruleDefinitionDtos.size()) {
+      if (request.getRules() != null && request.getRules().stream().collect(toSet()).size() != ruleDtos.size()) {
         ruleUuids.add("non-existing-uuid");
       }
 
@@ -125,7 +125,7 @@ public class IssueQueryFactory {
         .statuses(request.getStatuses())
         .resolutions(request.getResolutions())
         .resolved(request.getResolved())
-        .rules(ruleDefinitionDtos)
+        .rules(ruleDtos)
         .ruleUuids(ruleUuids)
         .assigneeUuids(request.getAssigneeUuids())
         .authors(request.getAuthors())
@@ -398,14 +398,8 @@ public class IssueQueryFactory {
   }
 
   private static void addDirectories(IssueQuery.Builder builder, List<ComponentDto> directories) {
-    Collection<String> directoryModuleUuids = new HashSet<>();
-    Collection<String> directoryPaths = new HashSet<>();
-    for (ComponentDto directory : directories) {
-      directoryModuleUuids.add(directory.moduleUuid());
-      directoryPaths.add(directory.path());
-    }
-    builder.moduleUuids(directoryModuleUuids);
-    builder.directories(directoryPaths);
+    Set<String> paths = directories.stream().map(ComponentDto::path).collect(Collectors.toSet());
+    builder.directories(paths);
   }
 
   private List<ComponentDto> getComponentsFromKeys(DbSession dbSession, Collection<String> componentKeys, @Nullable String branch, @Nullable String pullRequest) {
@@ -431,9 +425,9 @@ public class IssueQueryFactory {
     return componentDtos;
   }
 
-  private Collection<RuleDefinitionDto> ruleKeysToRuleId(DbSession dbSession, @Nullable Collection<String> rules) {
+  private Collection<RuleDto> ruleKeysToRuleId(DbSession dbSession, @Nullable Collection<String> rules) {
     if (rules != null) {
-      return dbClient.ruleDao().selectDefinitionByKeys(dbSession, transform(rules, RuleKey::parse));
+      return dbClient.ruleDao().selectByKeys(dbSession, transform(rules, RuleKey::parse));
     }
     return Collections.emptyList();
   }

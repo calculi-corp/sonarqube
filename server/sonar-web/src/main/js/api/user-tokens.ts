@@ -19,14 +19,19 @@
  */
 import { throwGlobalError } from '../helpers/error';
 import { getJSON, post, postJSON } from '../helpers/request';
-import { NewUserToken, UserToken } from '../types/types';
+import { NewUserToken, UserToken } from '../types/token';
 
 /** List tokens for given user login */
 export function getTokens(login: string): Promise<UserToken[]> {
   return getJSON('/api/user_tokens/search', { login }).then(r => r.userTokens, throwGlobalError);
 }
 
-export function generateToken(data: { name: string; login?: string }): Promise<NewUserToken> {
+export function generateToken(data: {
+  name: string;
+  projectKey?: string;
+  type?: string;
+  login?: string;
+}): Promise<NewUserToken> {
   return postJSON('/api/user_tokens/generate', data).catch(throwGlobalError);
 }
 

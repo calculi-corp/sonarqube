@@ -45,7 +45,7 @@ public class DefaultScannerWsClientTest {
   @Rule
   public LogTester logTester = new LogTester();
 
-  WsClient wsClient = mock(WsClient.class, Mockito.RETURNS_DEEP_STUBS);
+  private final WsClient wsClient = mock(WsClient.class, Mockito.RETURNS_DEEP_STUBS);
 
   @Test
   public void log_and_profile_request_if_debug_level() {
@@ -54,8 +54,7 @@ public class DefaultScannerWsClientTest {
     when(wsClient.wsConnector().call(request)).thenReturn(response);
 
     logTester.setLevel(LoggerLevel.DEBUG);
-    DefaultScannerWsClient underTest = new DefaultScannerWsClient(wsClient, false, new GlobalAnalysisMode(
-      new ScannerProperties(Collections.emptyMap())));
+    DefaultScannerWsClient underTest = new DefaultScannerWsClient(wsClient, false, new GlobalAnalysisMode(new ScannerProperties(Collections.emptyMap())));
 
     WsResponse result = underTest.call(request);
 

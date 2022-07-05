@@ -36,7 +36,6 @@ import org.sonar.api.server.ws.WebService;
 import org.sonar.api.utils.KeyValueFormat;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
-import org.sonar.db.rule.RuleDefinitionDto;
 import org.sonar.db.rule.RuleDto;
 import org.sonar.db.rule.RuleParamDto;
 import org.sonar.server.exceptions.NotFoundException;
@@ -105,7 +104,7 @@ public class UpdateAction implements RulesWsAction {
       .setExampleValue("java8,security");
 
     action.createParam(PARAM_MARKDOWN_NOTE)
-      .setDescription("Optional note in markdown format. Use empty value to remove current note. Note is not changed " +
+      .setDescription("Optional note in <a href='/formatting/help'>markdown format</a>. Use empty value to remove current note. Note is not changed " +
         "if the parameter is not set.")
       .setExampleValue("my *note*");
 
@@ -132,7 +131,7 @@ public class UpdateAction implements RulesWsAction {
 
     action
       .createParam(PARAM_DESCRIPTION)
-      .setDescription("Rule description (mandatory for custom rule and manual rule)")
+      .setDescription("Rule description (mandatory for custom rule and manual rule) in <a href='/formatting/help'>markdown format</a>")
       .setExampleValue("Description of my custom rule");
 
     action
@@ -238,9 +237,9 @@ public class UpdateAction implements RulesWsAction {
   private UpdateResponse buildResponse(DbSession dbSession, RuleKey key) {
     RuleDto rule = dbClient.ruleDao().selectByKey(dbSession, key)
       .orElseThrow(() -> new NotFoundException(format("Rule not found: %s", key)));
-    List<RuleDefinitionDto> templateRules = new ArrayList<>(1);
-    if (rule.getDefinition().isCustomRule()) {
-      dbClient.ruleDao().selectDefinitionByUuid(rule.getTemplateUuid(), dbSession).ifPresent(templateRules::add);
+    List<RuleDto> templateRules = new ArrayList<>(1);
+    if (rule.isCustomRule()) {
+      dbClient.ruleDao().selectByUuid(rule.getTemplateUuid(), dbSession).ifPresent(templateRules::add);
     }
     List<RuleParamDto> ruleParameters = dbClient.ruleDao().selectRuleParamsByRuleUuids(dbSession, singletonList(rule.getUuid()));
     UpdateResponse.Builder responseBuilder = UpdateResponse.newBuilder();
@@ -250,7 +249,7 @@ public class UpdateAction implements RulesWsAction {
       .setRuleParameters(ruleParameters)
       .setTotal(1L);
     responseBuilder
-      .setRule(mapper.toWsRule(rule.getDefinition(), searchResult, Collections.emptySet(), rule.getMetadata(),
+      .setRule(mapper.toWsRule(rule, searchResult, Collections.emptySet(),
         ruleWsSupport.getUsersByUuid(dbSession, singletonList(rule)), emptyMap()));
 
     return responseBuilder.build();

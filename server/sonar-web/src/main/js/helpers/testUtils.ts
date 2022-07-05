@@ -19,14 +19,29 @@
  */
 import { ReactWrapper, ShallowWrapper } from 'enzyme';
 import { setImmediate } from 'timers';
-import { KeyboardCodes, KeyboardKeys } from './keycodes';
+import { KeyboardKeys } from './keycodes';
 
 export function mockEvent(overrides = {}) {
   return {
-    target: { blur() {} },
-    currentTarget: { blur() {} },
-    preventDefault() {},
-    stopPropagation() {},
+    target: {
+      blur() {
+        /* noop */
+      }
+    },
+    currentTarget: {
+      blur() {
+        /* noop */
+      }
+    },
+    preventDefault() {
+      /* noop */
+    },
+    stopPropagation() {
+      /* noop */
+    },
+    stopImmediatePropagation() {
+      /* noop */
+    },
     ...overrides
   } as any;
 }
@@ -54,7 +69,11 @@ export function submit(element: ShallowWrapper | ReactWrapper): void {
   });
 }
 
-export function change(element: ShallowWrapper | ReactWrapper, value: string, event = {}): void {
+export function change(
+  element: ShallowWrapper | ReactWrapper,
+  value: string | object,
+  event = {}
+): void {
   // `type()` returns a component constructor for a composite element and string for DOM nodes
   if (typeof element.type() === 'function') {
     element.prop<Function>('onChange')(value);
@@ -70,23 +89,28 @@ export function change(element: ShallowWrapper | ReactWrapper, value: string, ev
   }
 }
 
-export const KEYCODE_MAP: { [code in KeyboardCodes]?: string } = {
-  [KeyboardCodes.Enter]: 'enter',
-  [KeyboardCodes.LeftArrow]: 'left',
-  [KeyboardCodes.UpArrow]: 'up',
-  [KeyboardCodes.RightArrow]: 'right',
-  [KeyboardCodes.DownArrow]: 'down'
+export const KEYCODE_MAP: { [code in KeyboardKeys]?: string } = {
+  [KeyboardKeys.Enter]: 'enter',
+  [KeyboardKeys.LeftArrow]: 'left',
+  [KeyboardKeys.UpArrow]: 'up',
+  [KeyboardKeys.RightArrow]: 'right',
+  [KeyboardKeys.DownArrow]: 'down'
 };
 
-export function keydown(args: { code?: KeyboardCodes; key?: KeyboardKeys }): void {
+export function keydown(args: { key?: KeyboardKeys; metaKey?: boolean; ctrlKey?: boolean }): void {
   const event = new KeyboardEvent('keydown', args as KeyboardEventInit);
   document.dispatchEvent(event);
 }
 
-export function elementKeydown(element: ShallowWrapper, code: KeyboardCodes): void {
+export function elementKeydown(element: ShallowWrapper, key: KeyboardKeys): void {
   const event = {
     currentTarget: { element },
-    nativeEvent: { code },
+    nativeEvent: {
+      key,
+      stopImmediatePropagation: () => {
+        /* noop */
+      }
+    },
     preventDefault() {
       /*noop*/
     }

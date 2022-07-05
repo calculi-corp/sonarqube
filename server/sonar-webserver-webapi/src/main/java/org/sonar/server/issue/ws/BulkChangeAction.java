@@ -54,7 +54,7 @@ import org.sonar.db.component.BranchDto;
 import org.sonar.db.component.BranchType;
 import org.sonar.db.component.ComponentDto;
 import org.sonar.db.issue.IssueDto;
-import org.sonar.db.rule.RuleDefinitionDto;
+import org.sonar.db.rule.RuleDto;
 import org.sonar.db.user.UserDto;
 import org.sonar.server.issue.Action;
 import org.sonar.server.issue.ActionContext;
@@ -70,6 +70,7 @@ import org.sonar.server.issue.notification.IssuesChangesNotificationBuilder.User
 import org.sonar.server.issue.notification.IssuesChangesNotificationBuilder.UserChange;
 import org.sonar.server.issue.notification.IssuesChangesNotificationSerializer;
 import org.sonar.server.notification.NotificationManager;
+import org.sonar.server.pushapi.issues.IssueChangeEventService;
 import org.sonar.server.user.UserSession;
 import org.sonarqube.ws.Issues;
 
@@ -117,6 +118,7 @@ import static org.sonarqube.ws.client.issue.IssuesWsParameters.PARAM_SET_TYPE;
 public class BulkChangeAction implements IssuesWsAction {
 
   private static final Logger LOG = Loggers.get(BulkChangeAction.class);
+  private static final List<String> ACTIONS_TO_DISTRIBUTE = List.of(SET_SEVERITY_KEY, SET_TYPE_KEY, DO_TRANSITION_KEY);
 
   private final System2 system2;
   private final UserSession userSession;
@@ -126,10 +128,12 @@ public class BulkChangeAction implements IssuesWsAction {
   private final List<Action> actions;
   private final IssueChangePostProcessor issueChangePostProcessor;
   private final IssuesChangesNotificationSerializer notificationSerializer;
+  private final IssueChangeEventService issueChangeEventService;
 
   public BulkChangeAction(System2 system2, UserSession userSession, DbClient dbClient, WebIssueStorage issueStorage,
-                          NotificationManager notificationService, List<Action> actions,
-                          IssueChangePostProcessor issueChangePostProcessor, IssuesChangesNotificationSerializer notificationSerializer) {
+    NotificationManager notificationService, List<Action> actions,
+    IssueChangePostProcessor issueChangePostProcessor, IssuesChangesNotificationSerializer notificationSerializer,
+    IssueChangeEventService issueChangeEventService) {
     this.system2 = system2;
     this.userSession = userSession;
     this.dbClient = dbClient;
@@ -138,6 +142,7 @@ public class BulkChangeAction implements IssuesWsAction {
     this.actions = actions;
     this.issueChangePostProcessor = issueChangePostProcessor;
     this.notificationSerializer = notificationSerializer;
+    this.issueChangeEventService = issueChangeEventService;
   }
 
   @Override
@@ -217,6 +222,7 @@ public class BulkChangeAction implements IssuesWsAction {
     UserDto author = dbClient.userDao().selectByUuid(dbSession, authorUuid);
     checkState(author != null, "User with uuid '%s' does not exist");
     sendNotification(items, bulkChangeData, userDtoByUuid, author);
+    distributeEvents(items, bulkChangeData);
 
     return result;
   }
@@ -285,6 +291,28 @@ public class BulkChangeAction implements IssuesWsAction {
     notificationService.scheduleForSending(notificationSerializer.serialize(builder));
   }
 
+  private void distributeEvents(Collection<DefaultIssue> issues, BulkChangeData bulkChangeData) {
+    boolean anyActionToDistribute = bulkChangeData.availableActions
+      .stream()
+      .anyMatch(a -> ACTIONS_TO_DISTRIBUTE.contains(a.key()));
+
+    if (!anyActionToDistribute) {
+      return;
+    }
+
+    Set<DefaultIssue> changedIssues = issues.stream()
+      // should not happen but filter it out anyway to avoid NPE in oldestUpdateDate call below
+      .filter(issue -> issue.updateDate() != null)
+      .filter(Objects::nonNull)
+      .collect(toSet(issues.size()));
+
+    if (changedIssues.isEmpty()) {
+      return;
+    }
+
+    issueChangeEventService.distributeIssueChangeEvent(issues, bulkChangeData.projectsByUuid, bulkChangeData.branchesByProjectUuid);
+  }
+
   @CheckForNull
   private ChangedIssue toNotification(BulkChangeData bulkChangeData, Map<String, UserDto> userDtoByUuid, DefaultIssue issue) {
     BranchDto branchDto = bulkChangeData.branchesByProjectUuid.get(issue.projectUuid());
@@ -292,7 +320,7 @@ public class BulkChangeAction implements IssuesWsAction {
       return null;
     }
 
-    RuleDefinitionDto ruleDefinitionDto = bulkChangeData.rulesByKey.get(issue.ruleKey());
+    RuleDto ruleDefinitionDto = bulkChangeData.rulesByKey.get(issue.ruleKey());
     ComponentDto projectDto = bulkChangeData.projectsByUuid.get(issue.projectUuid());
     if (ruleDefinitionDto == null || projectDto == null) {
       return null;
@@ -343,7 +371,7 @@ public class BulkChangeAction implements IssuesWsAction {
     private final Map<String, ComponentDto> projectsByUuid;
     private final Map<String, BranchDto> branchesByProjectUuid;
     private final Map<String, ComponentDto> componentsByUuid;
-    private final Map<RuleKey, RuleDefinitionDto> rulesByKey;
+    private final Map<RuleKey, RuleDto> rulesByKey;
     private final List<Action> availableActions;
 
     BulkChangeData(DbSession dbSession, Request request) {
@@ -365,9 +393,9 @@ public class BulkChangeAction implements IssuesWsAction {
       this.componentsByUuid = getComponents(dbSession,
         issues.stream().map(DefaultIssue::componentUuid).collect(MoreCollectors.toSet())).stream()
         .collect(uniqueIndex(ComponentDto::uuid, identity()));
-      this.rulesByKey = dbClient.ruleDao().selectDefinitionByKeys(dbSession,
-        issues.stream().map(DefaultIssue::ruleKey).collect(MoreCollectors.toSet())).stream()
-        .collect(uniqueIndex(RuleDefinitionDto::getKey, identity()));
+      this.rulesByKey = dbClient.ruleDao().selectByKeys(dbSession,
+          issues.stream().map(DefaultIssue::ruleKey).collect(MoreCollectors.toSet())).stream()
+        .collect(uniqueIndex(RuleDto::getKey, identity()));
 
       this.availableActions = actions.stream()
         .filter(action -> propertiesByActions.containsKey(action.key()))

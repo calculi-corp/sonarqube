@@ -4,9 +4,12 @@ exports[`should render correctly: default 1`] = `
 <div
   className="issue-row"
 >
-  <ContextConsumer>
-    <Component />
-  </ContextConsumer>
+  <IssueMessage
+    engine="foo"
+    manualVulnerability={false}
+    message="Reduce the number of conditional operators (4) used in the expression"
+    ruleKey="javascript:S1067"
+  />
   <div
     className="issue-row-meta"
   >
@@ -70,19 +73,13 @@ exports[`should render correctly: default 1`] = `
       >
         <Link
           className="js-issue-permalink link-no-underline"
-          onlyActiveOnIndex={false}
-          style={Object {}}
           target="_blank"
           title="permalink"
           to={
             Object {
+              "hash": "",
               "pathname": "/project/issues",
-              "query": Object {
-                "id": "myproject",
-                "issues": "AVsae-CQS-9G3txfbFN2",
-                "open": "AVsae-CQS-9G3txfbFN2",
-                "types": undefined,
-              },
+              "search": "?issues=AVsae-CQS-9G3txfbFN2&open=AVsae-CQS-9G3txfbFN2&id=myproject",
             }
           }
         >
@@ -94,23 +91,16 @@ exports[`should render correctly: default 1`] = `
 </div>
 `;
 
-exports[`should render correctly: issue message 1`] = `
-<IssueMessage
-  engine="foo"
-  manualVulnerability={false}
-  message="Reduce the number of conditional operators (4) used in the expression"
-  onOpenRule={[Function]}
-  ruleKey="javascript:S1067"
-/>
-`;
-
 exports[`should render correctly: with filter 1`] = `
 <div
   className="issue-row"
 >
-  <ContextConsumer>
-    <Component />
-  </ContextConsumer>
+  <IssueMessage
+    engine="foo"
+    manualVulnerability={false}
+    message="Reduce the number of conditional operators (4) used in the expression"
+    ruleKey="javascript:S1067"
+  />
   <div
     className="issue-row-meta"
   >
@@ -174,19 +164,13 @@ exports[`should render correctly: with filter 1`] = `
       >
         <Link
           className="js-issue-permalink link-no-underline"
-          onlyActiveOnIndex={false}
-          style={Object {}}
           target="_blank"
           title="permalink"
           to={
             Object {
+              "hash": "",
               "pathname": "/project/issues",
-              "query": Object {
-                "id": "myproject",
-                "issues": "AVsae-CQS-9G3txfbFN2",
-                "open": "AVsae-CQS-9G3txfbFN2",
-                "types": undefined,
-              },
+              "search": "?issues=AVsae-CQS-9G3txfbFN2&open=AVsae-CQS-9G3txfbFN2&id=myproject",
             }
           }
         >
@@ -243,9 +227,11 @@ exports[`should render correctly: with multi locations 1`] = `
 <div
   className="issue-row"
 >
-  <ContextConsumer>
-    <Component />
-  </ContextConsumer>
+  <IssueMessage
+    manualVulnerability={false}
+    message="Reduce the number of conditional operators (4) used in the expression"
+    ruleKey="javascript:S1067"
+  />
   <div
     className="issue-row-meta"
   >
@@ -388,19 +374,13 @@ exports[`should render correctly: with multi locations 1`] = `
       >
         <Link
           className="js-issue-permalink link-no-underline"
-          onlyActiveOnIndex={false}
-          style={Object {}}
           target="_blank"
           title="permalink"
           to={
             Object {
+              "hash": "",
               "pathname": "/project/issues",
-              "query": Object {
-                "id": "myproject",
-                "issues": "AVsae-CQS-9G3txfbFN2",
-                "open": "AVsae-CQS-9G3txfbFN2",
-                "types": undefined,
-              },
+              "search": "?issues=AVsae-CQS-9G3txfbFN2&open=AVsae-CQS-9G3txfbFN2&id=myproject",
             }
           }
         >
@@ -416,9 +396,11 @@ exports[`should render correctly: with multi locations and link 1`] = `
 <div
   className="issue-row"
 >
-  <ContextConsumer>
-    <Component />
-  </ContextConsumer>
+  <IssueMessage
+    manualVulnerability={false}
+    message="Reduce the number of conditional operators (4) used in the expression"
+    ruleKey="javascript:S1067"
+  />
   <div
     className="issue-row-meta"
   >
@@ -549,19 +531,12 @@ exports[`should render correctly: with multi locations and link 1`] = `
         className="issue-meta"
       >
         <Link
-          onlyActiveOnIndex={false}
-          style={Object {}}
           target="_blank"
           to={
             Object {
+              "hash": "",
               "pathname": "/project/issues",
-              "query": Object {
-                "branch": "branch-6.7",
-                "id": "myproject",
-                "issues": "AVsae-CQS-9G3txfbFN2",
-                "open": "AVsae-CQS-9G3txfbFN2",
-                "types": undefined,
-              },
+              "search": "?branch=branch-6.7&issues=AVsae-CQS-9G3txfbFN2&open=AVsae-CQS-9G3txfbFN2&id=myproject",
             }
           }
         >
@@ -579,20 +554,13 @@ exports[`should render correctly: with multi locations and link 1`] = `
       >
         <Link
           className="js-issue-permalink link-no-underline"
-          onlyActiveOnIndex={false}
-          style={Object {}}
           target="_blank"
           title="permalink"
           to={
             Object {
+              "hash": "",
               "pathname": "/project/issues",
-              "query": Object {
-                "branch": "branch-6.7",
-                "id": "myproject",
-                "issues": "AVsae-CQS-9G3txfbFN2",
-                "open": "AVsae-CQS-9G3txfbFN2",
-                "types": undefined,
-              },
+              "search": "?branch=branch-6.7&issues=AVsae-CQS-9G3txfbFN2&open=AVsae-CQS-9G3txfbFN2&id=myproject",
             }
           }
         >

@@ -21,8 +21,8 @@ import { IntlShape } from 'react-intl';
 import { Location, Router } from '../components/hoc/withRouter';
 import { AppState } from './appstate';
 import { L10nBundle } from './l10nBundle';
-import { Dict } from './types';
-import { CurrentUser } from './users';
+import { Component, Dict } from './types';
+import { CurrentUser, HomePage } from './users';
 
 export enum AdminPageExtension {
   GovernanceConsole = 'governance/views_console'
@@ -40,6 +40,7 @@ export interface ExtensionStartMethod {
 export interface ExtensionStartMethodParameter {
   appState: AppState;
   el: HTMLElement | undefined | null;
+  component?: Component;
   currentUser: CurrentUser;
   intl: IntlShape;
   location: Location;
@@ -54,6 +55,9 @@ export interface ExtensionStartMethodParameter {
   };
   baseUrl: string;
   l10nBundle: L10nBundle;
+  // See SONAR-16207 and core-extension-governance/src/main/js/portfolios/components/Header.tsx
+  // for more information on why we're passing this as a prop to an extension.
+  updateCurrentUserHomepage: (homepage: HomePage) => void;
 }
 
 export type ExtensionStartMethodReturnType = React.ReactNode | Function | void | undefined | null;

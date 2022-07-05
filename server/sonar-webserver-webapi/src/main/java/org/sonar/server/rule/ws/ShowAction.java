@@ -23,12 +23,12 @@ import com.google.common.io.Resources;
 import java.util.Collections;
 import java.util.List;
 import org.sonar.api.rule.RuleKey;
+import org.sonar.api.server.ws.Change;
 import org.sonar.api.server.ws.Request;
 import org.sonar.api.server.ws.Response;
 import org.sonar.api.server.ws.WebService;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
-import org.sonar.db.rule.RuleDefinitionDto;
 import org.sonar.db.rule.RuleDto;
 import org.sonar.db.rule.RuleParamDto;
 import org.sonar.server.exceptions.NotFoundException;
@@ -64,20 +64,23 @@ public class ShowAction implements RulesWsAction {
   public void define(WebService.NewController controller) {
     WebService.NewAction action = controller
       .createAction("show")
-      .setDescription("Get detailed information about a rule<br>" +
-        "Since 5.5, following fields in the response have been deprecated :" +
-        "<ul>" +
-        "<li>\"effortToFixDescription\" becomes \"gapDescription\"</li>" +
-        "<li>\"debtRemFnCoeff\" becomes \"remFnGapMultiplier\"</li>" +
-        "<li>\"defaultDebtRemFnCoeff\" becomes \"defaultRemFnGapMultiplier\"</li>" +
-        "<li>\"debtRemFnOffset\" becomes \"remFnBaseEffort\"</li>" +
-        "<li>\"defaultDebtRemFnOffset\" becomes \"defaultRemFnBaseEffort\"</li>" +
-        "<li>\"debtOverloaded\" becomes \"remFnOverloaded\"</li>" +
-        "</ul>" +
-        "In 7.1, the field 'scope' has been added.")
+      .setDescription("Get detailed information about a rule<br>")
       .setSince("4.2")
       .setResponseExample(Resources.getResource(getClass(), "show-example.json"))
-      .setHandler(this);
+      .setHandler(this)
+      .setChangelog(
+        new Change("5.5", "The field 'effortToFixDescription' has been deprecated use 'gapDescription' instead"),
+        new Change("5.5", "The field 'debtRemFnCoeff' has been deprecated use 'remFnGapMultiplier' instead"),
+        new Change("5.5", "The field 'defaultDebtRemFnCoeff' has been deprecated use 'defaultRemFnGapMultiplier' instead"),
+        new Change("5.5", "The field 'debtRemFnOffset' has been deprecated use 'remFnBaseEffort' instead"),
+        new Change("5.5", "The field 'defaultDebtRemFnOffset' has been deprecated use 'defaultRemFnBaseEffort' instead"),
+        new Change("5.5", "The field 'debtOverloaded' has been deprecated use 'remFnOverloaded' instead"),
+        new Change("7.5", "The field 'scope' has been added"),
+        new Change("9.5", "The field 'htmlDesc' has been deprecated use 'descriptionSections' instead"),
+        new Change("9.5", "The field 'descriptionSections' has been added to the payload"),
+        new Change("9.5", "The field 'descriptionSections' has been added to the 'f' parameter"),
+        new Change("9.6", "'descriptionSections' can optionally embed a context field")
+      );
 
     action
       .createParam(PARAM_KEY)
@@ -99,8 +102,8 @@ public class ShowAction implements RulesWsAction {
       RuleDto rule = dbClient.ruleDao().selectByKey(dbSession, key)
         .orElseThrow(() -> new NotFoundException(format("Rule not found: %s", key)));
 
-      List<RuleDefinitionDto> templateRules = ofNullable(rule.getTemplateUuid())
-        .flatMap(templateUuid -> dbClient.ruleDao().selectDefinitionByUuid(rule.getTemplateUuid(), dbSession))
+      List<RuleDto> templateRules = ofNullable(rule.getTemplateUuid())
+        .flatMap(templateUuid -> dbClient.ruleDao().selectByUuid(rule.getTemplateUuid(), dbSession))
         .map(Collections::singletonList).orElseGet(Collections::emptyList);
 
       List<RuleParamDto> ruleParameters = dbClient.ruleDao().selectRuleParamsByRuleUuids(dbSession, singletonList(rule.getUuid()));
@@ -117,10 +120,10 @@ public class ShowAction implements RulesWsAction {
   private ShowResponse buildResponse(DbSession dbSession, Request request, SearchAction.SearchResult searchResult) {
     ShowResponse.Builder responseBuilder = ShowResponse.newBuilder();
     RuleDto rule = searchResult.getRules().get(0);
-    responseBuilder.setRule(mapper.toWsRule(rule.getDefinition(), searchResult, Collections.emptySet(), rule.getMetadata(),
+    responseBuilder.setRule(mapper.toWsRule(rule, searchResult, Collections.emptySet(),
       ruleWsSupport.getUsersByUuid(dbSession, searchResult.getRules()), emptyMap()));
     if (request.mandatoryParamAsBoolean(PARAM_ACTIVES)) {
-      activeRuleCompleter.completeShow(dbSession, rule.getDefinition()).forEach(responseBuilder::addActives);
+      activeRuleCompleter.completeShow(dbSession, rule).forEach(responseBuilder::addActives);
     }
     return responseBuilder.build();
   }

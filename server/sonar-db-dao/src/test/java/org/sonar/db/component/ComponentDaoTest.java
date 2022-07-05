@@ -55,7 +55,7 @@ import org.sonar.db.audit.model.ComponentNewValue;
 import org.sonar.db.issue.IssueDto;
 import org.sonar.db.metric.MetricDto;
 import org.sonar.db.project.ProjectDto;
-import org.sonar.db.rule.RuleDefinitionDto;
+import org.sonar.db.rule.RuleDto;
 import org.sonar.db.source.FileSourceDto;
 
 import static com.google.common.collect.ImmutableSet.of;
@@ -1670,6 +1670,33 @@ public class ComponentDaoTest {
   }
 
   @Test
+  public void select_children() {
+    ComponentDto project = newPrivateProjectDto(PROJECT_UUID);
+    db.components().insertProjectAndSnapshot(project);
+    ComponentDto module = newModuleDto(MODULE_UUID, project);
+    db.components().insertComponent(module);
+    ComponentDto fileInProject = newFileDto(project, null, FILE_1_UUID).setDbKey("file-key-1").setName("File One");
+    db.components().insertComponent(fileInProject);
+    ComponentDto file1InModule = newFileDto(module, null, FILE_2_UUID).setDbKey("file-key-2").setName("File Two");
+    db.components().insertComponent(file1InModule);
+    ComponentDto file2InModule = newFileDto(module, null, FILE_3_UUID).setDbKey("file-key-3").setName("File Three");
+    db.components().insertComponent(file2InModule);
+    db.commit();
+
+    // test children of root
+    assertThat(underTest.selectChildren(dbSession, project.uuid(), List.of(project))).extracting("uuid").containsOnly(FILE_1_UUID, MODULE_UUID);
+
+    // test children of intermediate component (module here)
+    assertThat(underTest.selectChildren(dbSession, project.uuid(), List.of(module))).extracting("uuid").containsOnly(FILE_2_UUID, FILE_3_UUID);
+
+    // test children of leaf component (file here)
+    assertThat(underTest.selectChildren(dbSession, project.uuid(), List.of(fileInProject))).isEmpty();
+
+    // test children of 2 components
+    assertThat(underTest.selectChildren(dbSession, project.uuid(), List.of(project, module))).extracting("uuid").containsOnly(FILE_1_UUID, MODULE_UUID, FILE_2_UUID, FILE_3_UUID);
+  }
+
+  @Test
   public void select_descendants_with_children_strategy() {
     // project has 2 children: module and file 1. Other files are part of module.
     ComponentDto project = newPrivateProjectDto(PROJECT_UUID);
@@ -1885,7 +1912,7 @@ public class ComponentDaoTest {
 
     ComponentDto branch2 = db.components().insertProjectBranch(project, ComponentTesting.newBranchDto(project.getUuid(), BRANCH).setKey("branch2"));
     ComponentDto fileBranch2 = db.components().insertComponent(ComponentTesting.newFileDto(branch2));
-    RuleDefinitionDto rule = db.rules().insert();
+    RuleDto rule = db.rules().insert();
     db.issues().insert(new IssueDto().setKee("i1").setComponent(fileBranch1).setProject(branch1).setRule(rule).setStatus(STATUS_CONFIRMED));
     db.issues().insert(new IssueDto().setKee("i2").setComponent(fileBranch2).setProject(branch2).setRule(rule).setStatus(STATUS_CLOSED));
     db.issues().insert(new IssueDto().setKee("i3").setComponent(fileBranch2).setProject(branch2).setRule(rule).setStatus(STATUS_OPEN));
@@ -1900,7 +1927,7 @@ public class ComponentDaoTest {
     final ProjectDto project = db.components().insertPrivateProjectDto(b -> b.setName("foo"));
     ComponentDto branch1 = db.components().insertProjectBranch(project, ComponentTesting.newBranchDto(project.getUuid(), BRANCH).setKey("branch1"));
     ComponentDto fileBranch1 = db.components().insertComponent(ComponentTesting.newFileDto(branch1));
-    RuleDefinitionDto rule = db.rules().insert();
+    RuleDto rule = db.rules().insert();
     db.issues().insert(new IssueDto().setKee("i").setComponent(fileBranch1).setProject(branch1).setRule(rule).setStatus(STATUS_CLOSED));
 
     List<KeyWithUuidDto> result = underTest.selectComponentsFromBranchesThatHaveOpenIssues(db.getSession(), singleton(branch1.uuid()));

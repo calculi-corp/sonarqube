@@ -33,13 +33,14 @@ interface Props {
   branchLike?: BranchLike;
   checked?: boolean;
   currentPopup?: string;
+  displayWhyIsThisAnIssue?: boolean;
   displayLocationsCount?: boolean;
   displayLocationsLink?: boolean;
   issue: Issue;
   onAssign: (login: string) => void;
   onChange: (issue: Issue) => void;
   onCheck?: (issue: string) => void;
-  onClick: (issueKey: string) => void;
+  onClick?: (issueKey: string) => void;
   onFilter?: (property: string, issue: Issue) => void;
   selected: boolean;
   togglePopup: (popup: string, show: boolean | void) => void;
@@ -68,11 +69,20 @@ export default class IssueView extends React.PureComponent<Props> {
   };
 
   render() {
-    const { issue } = this.props;
+    const {
+      issue,
+      branchLike,
+      checked,
+      currentPopup,
+      displayWhyIsThisAnIssue,
+      displayLocationsLink,
+      displayLocationsCount
+    } = this.props;
 
     const hasCheckbox = this.props.onCheck != null;
 
     const issueClass = classNames('issue', {
+      'no-click': this.props.onClick === undefined,
       hotspot: issue.type === 'SECURITY_HOTSPOT',
       'issue-with-checkbox': hasCheckbox,
       selected: this.props.selected
@@ -86,16 +96,17 @@ export default class IssueView extends React.PureComponent<Props> {
         role="region"
         aria-label={issue.message}>
         <IssueTitleBar
-          branchLike={this.props.branchLike}
-          currentPopup={this.props.currentPopup}
-          displayLocationsCount={this.props.displayLocationsCount}
-          displayLocationsLink={this.props.displayLocationsLink}
+          branchLike={branchLike}
+          currentPopup={currentPopup}
+          displayLocationsCount={displayLocationsCount}
+          displayLocationsLink={displayLocationsLink}
+          displayWhyIsThisAnIssue={displayWhyIsThisAnIssue}
           issue={issue}
           onFilter={this.props.onFilter}
           togglePopup={this.props.togglePopup}
         />
         <IssueActionsBar
-          currentPopup={this.props.currentPopup}
+          currentPopup={currentPopup}
           issue={issue}
           onAssign={this.props.onAssign}
           onChange={this.props.onChange}
@@ -115,7 +126,7 @@ export default class IssueView extends React.PureComponent<Props> {
         )}
         {hasCheckbox && (
           <Checkbox
-            checked={this.props.checked || false}
+            checked={checked || false}
             className="issue-checkbox-container"
             onCheck={this.handleCheck}
             title={translate('issues.action_select')}

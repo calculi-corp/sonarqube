@@ -132,23 +132,6 @@ public class GlobalActionTest {
   }
 
   @Test
-  public void return_sonarcloud_settings() {
-    settings.setProperty("sonar.sonarcloud.enabled", true);
-    settings.setProperty("sonar.prismic.accessToken", "secret");
-    settings.setProperty("sonar.analytics.gtm.trackingId", "gtm_id");
-    settings.setProperty("sonar.homepage.url", "https://s3/homepage.json");
-    init();
-
-    assertJson(call()).isSimilarTo("{" +
-      "  \"settings\": {" +
-      "    \"sonar.prismic.accessToken\": \"secret\"," +
-      "    \"sonar.analytics.gtm.trackingId\": \"gtm_id\"," +
-      "    \"sonar.homepage.url\": \"https://s3/homepage.json\"" +
-      "  }" +
-      "}");
-  }
-
-  @Test
   public void return_developer_info_disabled_setting() {
     init();
     settings.setProperty("sonar.developerAggregatedInfo.disabled", true);
@@ -278,6 +261,7 @@ public class GlobalActionTest {
     assertJson(call()).isSimilarTo("{\"projectImportFeatureEnabled\":false}");
   }
 
+
   @Test
   public void return_need_issue_sync() {
     init();
@@ -289,11 +273,26 @@ public class GlobalActionTest {
   }
 
   @Test
-  public void can_admin_on_global_level() {
+  public void regulatory_report_feature_enabled_ee_dce() {
     init();
-    userSession.logIn().setRoot();
+    when(editionProvider.get()).thenReturn(Optional.of(ENTERPRISE));
+    assertJson(call()).isSimilarTo("{\"regulatoryReportFeatureEnabled\":true}");
 
-    assertJson(call()).isSimilarTo("{\"canAdmin\":true}");
+    when(editionProvider.get()).thenReturn(Optional.of(DATACENTER));
+    assertJson(call()).isSimilarTo("{\"regulatoryReportFeatureEnabled\":true}");
+  }
+
+  @Test
+  public void regulatory_report_feature_disabled_ce_de() {
+    init();
+    when(editionProvider.get()).thenReturn(Optional.of(COMMUNITY));
+    assertJson(call()).isSimilarTo("{\"regulatoryReportFeatureEnabled\":false}");
+
+    when(editionProvider.get()).thenReturn(Optional.of(DEVELOPER));
+    assertJson(call()).isSimilarTo("{\"regulatoryReportFeatureEnabled\":false}");
+
+    when(editionProvider.get()).thenReturn(Optional.empty());
+    assertJson(call()).isSimilarTo("{\"regulatoryReportFeatureEnabled\":false}");
   }
 
   @Test
@@ -315,7 +314,7 @@ public class GlobalActionTest {
   @Test
   public void standalone_flag() {
     init();
-    userSession.logIn().setRoot();
+    userSession.logIn().setSystemAdministrator();
     when(webServer.isStandalone()).thenReturn(true);
 
     assertJson(call()).isSimilarTo("{\"standalone\":true}");
@@ -324,7 +323,7 @@ public class GlobalActionTest {
   @Test
   public void not_standalone_flag() {
     init();
-    userSession.logIn().setRoot();
+    userSession.logIn().setSystemAdministrator();
     when(webServer.isStandalone()).thenReturn(false);
 
     assertJson(call()).isSimilarTo("{\"standalone\":false}");

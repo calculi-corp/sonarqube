@@ -20,9 +20,8 @@
 import { debounce, keyBy } from 'lodash';
 import lunr, { LunrIndex } from 'lunr';
 import * as React from 'react';
-import { InjectedRouter } from 'react-router';
-import { withRouter } from '../../../components/hoc/withRouter';
-import { KeyboardCodes } from '../../../helpers/keycodes';
+import { Router, withRouter } from '../../../components/hoc/withRouter';
+import { KeyboardKeys } from '../../../helpers/keycodes';
 import { ExtendedSettingDefinition } from '../../../types/settings';
 import { Component, Dict } from '../../../types/types';
 import {
@@ -36,7 +35,7 @@ interface Props {
   className?: string;
   component?: Component;
   definitions: ExtendedSettingDefinition[];
-  router: InjectedRouter;
+  router: Router;
 }
 
 interface State {
@@ -124,16 +123,16 @@ export class SettingsSearch extends React.Component<Props, State> {
   };
 
   handleKeyDown = (event: React.KeyboardEvent) => {
-    switch (event.nativeEvent.code) {
-      case KeyboardCodes.Enter:
+    switch (event.nativeEvent.key) {
+      case KeyboardKeys.Enter:
         event.preventDefault();
         this.openSelected();
         return;
-      case KeyboardCodes.UpArrow:
+      case KeyboardKeys.UpArrow:
         event.preventDefault();
         this.selectPrevious();
         return;
-      case KeyboardCodes.DownArrow:
+      case KeyboardKeys.DownArrow:
         event.preventDefault();
         this.selectNext();
         // keep this return to prevent fall-through in case more cases will be adder later

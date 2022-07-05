@@ -20,6 +20,8 @@
 package org.sonar.server.rule.ws;
 
 import java.util.List;
+import java.util.Optional;
+import javax.annotation.Nullable;
 import org.junit.Before;
 import org.junit.Test;
 import org.sonar.api.resources.Languages;
@@ -27,15 +29,18 @@ import org.sonar.api.rule.RuleKey;
 import org.sonar.api.rule.Severity;
 import org.sonar.api.rules.RuleType;
 import org.sonar.api.server.ws.WebService;
+import org.sonar.core.util.UuidFactory;
+import org.sonar.core.util.UuidFactoryFast;
 import org.sonar.db.DbTester;
 import org.sonar.db.qualityprofile.ActiveRuleDto;
 import org.sonar.db.qualityprofile.ActiveRuleParamDto;
 import org.sonar.db.qualityprofile.QProfileDto;
-import org.sonar.db.rule.RuleDefinitionDto;
+import org.sonar.db.rule.RuleDescriptionSectionContextDto;
+import org.sonar.db.rule.RuleDescriptionSectionDto;
 import org.sonar.db.rule.RuleDto;
-import org.sonar.db.rule.RuleMetadataDto;
 import org.sonar.db.rule.RuleParamDto;
 import org.sonar.db.user.UserDto;
+import org.sonar.server.rule.RuleDescriptionFormatter;
 import org.sonar.server.tester.UserSessionRule;
 import org.sonar.server.text.MacroInterpreter;
 import org.sonar.server.ws.WsActionTester;
@@ -50,8 +55,17 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.sonar.api.server.rule.RuleDescriptionSection.RuleDescriptionSectionKeys.ASSESS_THE_PROBLEM_SECTION_KEY;
+import static org.sonar.api.server.rule.RuleDescriptionSection.RuleDescriptionSectionKeys.HOW_TO_FIX_SECTION_KEY;
+import static org.sonar.api.server.rule.RuleDescriptionSection.RuleDescriptionSectionKeys.RESOURCES_SECTION_KEY;
+import static org.sonar.api.server.rule.RuleDescriptionSection.RuleDescriptionSectionKeys.ROOT_CAUSE_SECTION_KEY;
+import static org.sonar.db.rule.RuleDescriptionSectionDto.DEFAULT_KEY;
+import static org.sonar.db.rule.RuleDescriptionSectionDto.createDefaultRuleDescriptionSection;
 import static org.sonar.db.rule.RuleDto.Format.MARKDOWN;
 import static org.sonar.db.rule.RuleTesting.newCustomRule;
+import static org.sonar.db.rule.RuleTesting.newRule;
+import static org.sonar.db.rule.RuleTesting.newRuleWithoutDescriptionSection;
 import static org.sonar.db.rule.RuleTesting.newTemplateRule;
 import static org.sonar.db.rule.RuleTesting.setTags;
 import static org.sonar.server.language.LanguageTesting.newLanguage;
@@ -69,21 +83,24 @@ public class ShowActionTest {
   @org.junit.Rule
   public DbTester db = DbTester.create();
 
+  private final UuidFactory uuidFactory = UuidFactoryFast.getInstance();
   private final MacroInterpreter macroInterpreter = mock(MacroInterpreter.class);
   private final Languages languages = new Languages(newLanguage("xoo", "Xoo"));
   private final WsActionTester ws = new WsActionTester(
-    new ShowAction(db.getDbClient(), new RuleMapper(languages, macroInterpreter),
+    new ShowAction(db.getDbClient(), new RuleMapper(languages, macroInterpreter, new RuleDescriptionFormatter()),
       new ActiveRuleCompleter(db.getDbClient(), languages),
       new RuleWsSupport(db.getDbClient(), userSession)));
+  private UserDto userDto;
 
   @Before
   public void before() {
+    userDto = db.users().insertUser();
     doReturn(INTERPRETED).when(macroInterpreter).interpret(anyString());
   }
 
   @Test
   public void show_rule_key() {
-    RuleDefinitionDto rule = db.rules().insert();
+    RuleDto rule = db.rules().insert(r -> r.setNoteUserUuid(userDto.getUuid()));
 
     ShowResponse result = ws.newRequest()
       .setParam(PARAM_KEY, rule.getKey().toString())
@@ -94,7 +111,7 @@ public class ShowActionTest {
 
   @Test
   public void show_rule_with_basic_info() {
-    RuleDefinitionDto rule = db.rules().insert();
+    RuleDto rule = db.rules().insert(r -> r.setNoteUserUuid(userDto.getUuid()));
     RuleParamDto ruleParam = db.rules().insertRuleParam(rule);
 
     ShowResponse result = ws.newRequest()
@@ -117,22 +134,20 @@ public class ShowActionTest {
 
   @Test
   public void show_rule_tags() {
-    RuleDefinitionDto rule = db.rules().insert();
-    RuleMetadataDto metadata = db.rules().insertOrUpdateMetadata(rule, setTags("tag1", "tag2"), m -> m.setNoteData(null).setNoteUserUuid(null));
+    RuleDto rule = db.rules().insert(setTags("tag1", "tag2"), r -> r.setNoteData(null).setNoteUserUuid(null));
 
     ShowResponse result = ws.newRequest()
       .setParam(PARAM_KEY, rule.getKey().toString())
       .executeProtobuf(ShowResponse.class);
 
     assertThat(result.getRule().getTags().getTagsList())
-      .containsExactly(metadata.getTags().toArray(new String[0]));
+      .containsExactly(rule.getTags().toArray(new String[0]));
   }
 
   @Test
   public void show_rule_with_note_login() {
-    RuleDefinitionDto rule = db.rules().insert();
     UserDto user = db.users().insertUser();
-    db.rules().insertOrUpdateMetadata(rule, user);
+    RuleDto rule = db.rules().insert(r -> r.setNoteUserUuid(user.getUuid()));
 
     ShowResponse result = ws.newRequest()
       .setParam(PARAM_KEY, rule.getKey().toString())
@@ -143,11 +158,15 @@ public class ShowActionTest {
 
   @Test
   public void show_rule_with_default_debt_infos() {
-    RuleDefinitionDto rule = db.rules().insert(r -> r
+    RuleDto rule = db.rules().insert(r -> r
       .setDefRemediationFunction("LINEAR_OFFSET")
       .setDefRemediationGapMultiplier("5d")
       .setDefRemediationBaseEffort("10h")
-      .setGapDescription("gap desc"));
+      .setGapDescription("gap desc")
+      .setNoteUserUuid(userDto.getUuid())
+      .setRemediationFunction(null)
+      .setRemediationGapMultiplier(null)
+      .setRemediationBaseEffort(null));
 
     ShowResponse result = ws.newRequest()
       .setParam(PARAM_KEY, rule.getKey().toString())
@@ -167,16 +186,15 @@ public class ShowActionTest {
 
   @Test
   public void show_rule_with_only_overridden_debt() {
-    RuleDefinitionDto rule = db.rules().insert(r -> r
+    RuleDto rule = db.rules().insert(r -> r
       .setDefRemediationFunction(null)
       .setDefRemediationGapMultiplier(null)
-      .setDefRemediationBaseEffort(null));
-    db.rules().insertOrUpdateMetadata(rule,
-      m -> m.setNoteData(null).setNoteUserUuid(null),
-      m -> m
-        .setRemediationFunction("LINEAR_OFFSET")
-        .setRemediationGapMultiplier("5d")
-        .setRemediationBaseEffort("10h"));
+      .setDefRemediationBaseEffort(null)
+      .setNoteData(null)
+      .setNoteUserUuid(null)
+      .setRemediationFunction("LINEAR_OFFSET")
+      .setRemediationGapMultiplier("5d")
+      .setRemediationBaseEffort("10h"));
 
     ShowResponse result = ws.newRequest()
       .setParam(PARAM_KEY, rule.getKey().toString())
@@ -195,15 +213,15 @@ public class ShowActionTest {
 
   @Test
   public void show_rule_with_default_and_overridden_debt_infos() {
-    RuleDefinitionDto rule = db.rules().insert(r -> r
+    RuleDto rule = db.rules().insert(r -> r
       .setDefRemediationFunction("LINEAR_OFFSET")
       .setDefRemediationGapMultiplier("5d")
-      .setDefRemediationBaseEffort("10h"));
-    db.rules().insertOrUpdateMetadata(rule, m -> m.setNoteData(null).setNoteUserUuid(null),
-      m -> m
-        .setRemediationFunction("CONSTANT_ISSUE")
-        .setRemediationGapMultiplier(null)
-        .setRemediationBaseEffort("15h"));
+      .setDefRemediationBaseEffort("10h")
+      .setNoteData(null)
+      .setNoteUserUuid(null)
+      .setRemediationFunction("CONSTANT_ISSUE")
+      .setRemediationGapMultiplier(null)
+      .setRemediationBaseEffort("15h"));
 
     ShowResponse result = ws.newRequest()
       .setParam(PARAM_KEY, rule.getKey().toString())
@@ -223,15 +241,15 @@ public class ShowActionTest {
 
   @Test
   public void show_rule_with_no_default_and_no_overridden_debt() {
-    RuleDefinitionDto rule = db.rules().insert(r -> r
+    RuleDto rule = db.rules().insert(r -> r
       .setDefRemediationFunction(null)
       .setDefRemediationGapMultiplier(null)
-      .setDefRemediationBaseEffort(null));
-    db.rules().insertOrUpdateMetadata(rule, m -> m.setNoteData(null).setNoteUserUuid(null),
-      m -> m
-        .setRemediationFunction(null)
-        .setRemediationGapMultiplier(null)
-        .setRemediationBaseEffort(null));
+      .setDefRemediationBaseEffort(null)
+      .setNoteData(null)
+      .setNoteUserUuid(null)
+      .setRemediationFunction(null)
+      .setRemediationGapMultiplier(null)
+      .setRemediationBaseEffort(null));
 
     ShowResponse result = ws.newRequest()
       .setParam(PARAM_KEY, rule.getKey().toString())
@@ -250,16 +268,16 @@ public class ShowActionTest {
 
   @Test
   public void show_deprecated_rule_debt_fields() {
-    RuleDefinitionDto rule = db.rules().insert(r -> r
+    RuleDto rule = db.rules().insert(r -> r
       .setDefRemediationFunction("LINEAR_OFFSET")
       .setDefRemediationGapMultiplier("5d")
       .setDefRemediationBaseEffort("10h")
-      .setGapDescription("gap desc"));
-    db.rules().insertOrUpdateMetadata(rule, m -> m.setNoteData(null).setNoteUserUuid(null),
-      m -> m
-        .setRemediationFunction("CONSTANT_ISSUE")
-        .setRemediationGapMultiplier(null)
-        .setRemediationBaseEffort("15h"));
+      .setGapDescription("gap desc")
+      .setNoteData(null)
+      .setNoteUserUuid(null)
+      .setRemediationFunction("CONSTANT_ISSUE")
+      .setRemediationGapMultiplier(null)
+      .setRemediationBaseEffort("15h"));
 
     ShowResponse result = ws.newRequest()
       .setParam(PARAM_KEY, rule.getKey().toString())
@@ -279,13 +297,12 @@ public class ShowActionTest {
 
   @Test
   public void encode_html_description_of_custom_rule() {
-    // Template rule
     RuleDto templateRule = newTemplateRule(RuleKey.of("java", "S001"));
-    db.rules().insert(templateRule.getDefinition());
-    // Custom rule
-    RuleDefinitionDto customRule = newCustomRule(templateRule.getDefinition())
-      .setDescription("<div>line1\nline2</div>")
-      .setDescriptionFormat(MARKDOWN);
+    db.rules().insert(templateRule);
+
+    RuleDto customRule = newCustomRule(templateRule, "<div>line1\nline2</div>")
+      .setDescriptionFormat(MARKDOWN)
+      .setNoteUserUuid(userDto.getUuid());
     db.rules().insert(customRule);
     doReturn("&lt;div&gt;line1<br/>line2&lt;/div&gt;").when(macroInterpreter).interpret("<div>line1\nline2</div>");
 
@@ -300,9 +317,10 @@ public class ShowActionTest {
 
   @Test
   public void show_external_rule() {
-    RuleDefinitionDto externalRule = db.rules().insert(r -> r
+    RuleDto externalRule = db.rules().insert(r -> r
       .setIsExternal(true)
-      .setName("ext rule name"));
+      .setName("ext rule name")
+      .setNoteUserUuid(userDto.getUuid()));
 
     ShowResponse result = ws.newRequest()
       .setParam(PARAM_KEY, externalRule.getKey().toString())
@@ -314,17 +332,18 @@ public class ShowActionTest {
 
   @Test
   public void show_adhoc_rule() {
-    RuleDefinitionDto externalRule = db.rules().insert(r -> r
+    //Ad-hoc description has no description sections defined
+    RuleDto externalRule = db.rules().insert(newRuleWithoutDescriptionSection()
       .setIsExternal(true)
-      .setIsAdHoc(true));
-    RuleMetadataDto metadata = db.rules().insertOrUpdateMetadata(externalRule, m -> m
+      .setIsAdHoc(true)
       .setAdHocName("adhoc name")
       .setAdHocDescription("<div>desc</div>")
       .setAdHocSeverity(Severity.BLOCKER)
       .setAdHocType(RuleType.VULNERABILITY)
       .setNoteData(null)
       .setNoteUserUuid(null));
-    doReturn("&lt;div&gt;desc2&lt;/div&gt;").when(macroInterpreter).interpret(metadata.getAdHocDescription());
+
+    doReturn("&lt;div&gt;desc2&lt;/div&gt;").when(macroInterpreter).interpret(externalRule.getAdHocDescription());
 
     ShowResponse result = ws.newRequest()
       .setParam(PARAM_KEY, externalRule.getKey().toString())
@@ -334,25 +353,98 @@ public class ShowActionTest {
     assertThat(resultRule)
       .extracting(Rule::getName, Rule::getHtmlDesc, Rule::getSeverity, Rule::getType)
       .containsExactlyInAnyOrder("adhoc name", "&lt;div&gt;desc2&lt;/div&gt;", Severity.BLOCKER, VULNERABILITY);
+
+    assertThat(resultRule.getDescriptionSections().getDescriptionSectionsList())
+      .extracting(Rule.DescriptionSection::getKey, Rule.DescriptionSection::getContent)
+      .containsExactly(tuple(DEFAULT_KEY, "&lt;div&gt;desc2&lt;/div&gt;"));
+  }
+
+  @Test
+  public void show_rule_desc_sections() {
+    when(macroInterpreter.interpret(anyString())).thenAnswer(invocation -> invocation.getArgument(0));
+
+    RuleDescriptionSectionDto section1 = createRuleDescriptionSection(ROOT_CAUSE_SECTION_KEY, "<div>Root is Root</div>");
+    RuleDescriptionSectionDto section2 = createRuleDescriptionSection(ASSESS_THE_PROBLEM_SECTION_KEY, "<div>This is not a problem</div>");
+    RuleDescriptionSectionDto section3 = createRuleDescriptionSection(HOW_TO_FIX_SECTION_KEY, "<div>I don't want to fix</div>");
+    RuleDescriptionSectionDto section4context1 = createRuleDescriptionSectionWithContext(RESOURCES_SECTION_KEY, "<div>I want to fix with Spring</div>", "ctx1");
+    RuleDescriptionSectionDto section4context2 = createRuleDescriptionSectionWithContext(RESOURCES_SECTION_KEY, "<div>I want to fix with Servlet</div>", "ctx2");
+
+
+    RuleDto rule = createRuleWithDescriptionSections(section1, section2, section3, section4context1, section4context2);
+    rule.setType(RuleType.SECURITY_HOTSPOT);
+    rule.setNoteUserUuid(userDto.getUuid());
+    db.rules().insert(rule);
+
+    ShowResponse result = ws.newRequest()
+      .setParam(PARAM_KEY, rule.getKey().toString())
+      .executeProtobuf(ShowResponse.class);
+
+    Rule resultRule = result.getRule();
+    assertThat(resultRule.getHtmlDesc())
+      .contains(
+        "<h2>What is the risk?</h2>"
+          + "<div>Root is Root</div><br/>"
+          + "<h2>Assess the risk</h2>"
+          + "<div>This is not a problem</div><br/>"
+          + "<h2>How can you fix it?</h2>"
+          + "<div>I don't want to fix</div><br/>"
+          + "<div>I want to fix with Spring</div>"
+      );
+
+    assertThat(resultRule.getMdDesc()).isEqualTo(resultRule.getHtmlDesc());
+
+    assertThat(resultRule.getDescriptionSections().getDescriptionSectionsList())
+      .extracting(Rule.DescriptionSection::getKey, Rule.DescriptionSection::getContent, section -> section.getContext().getDisplayName())
+      .containsExactlyInAnyOrder(
+        tuple(ROOT_CAUSE_SECTION_KEY, "<div>Root is Root</div>", ""),
+        tuple(ASSESS_THE_PROBLEM_SECTION_KEY, "<div>This is not a problem</div>", ""),
+        tuple(HOW_TO_FIX_SECTION_KEY, "<div>I don't want to fix</div>", ""),
+        tuple(RESOURCES_SECTION_KEY, "<div>I want to fix with Spring</div>", section4context1.getContext().getDisplayName()),
+        tuple(RESOURCES_SECTION_KEY, "<div>I want to fix with Servlet</div>", section4context2.getContext().getDisplayName())
+      );
+  }
+
+  @Test
+  public void show_rule_markdown_description() {
+    when(macroInterpreter.interpret(anyString())).thenAnswer(invocation -> invocation.getArgument(0));
+
+    var section = createRuleDescriptionSection("default", "*toto is toto*");
+
+    RuleDto rule = createRuleWithDescriptionSections(section);
+    rule.setDescriptionFormat(MARKDOWN);
+    rule.setNoteUserUuid(userDto.getUuid());
+    db.rules().insert(rule);
+
+    ShowResponse result = ws.newRequest()
+      .setParam(PARAM_KEY, rule.getKey().toString())
+      .executeProtobuf(ShowResponse.class);
+
+    Rule resultRule = result.getRule();
+
+    assertThat(resultRule.getHtmlDesc()).contains("<strong>toto is toto</strong>");
+    assertThat(resultRule.getMdDesc()).contains("*toto is toto*");
+
+    assertThat(resultRule.getDescriptionSections().getDescriptionSectionsList())
+      .extracting(Rule.DescriptionSection::getKey, Rule.DescriptionSection::getContent)
+      .contains(tuple(DEFAULT_KEY, "<strong>toto is toto</strong>"));
   }
 
   @Test
   public void ignore_predefined_info_on_adhoc_rule() {
-    RuleDefinitionDto externalRule = db.rules().insert(r -> r
+    RuleDto externalRule = newRule(createDefaultRuleDescriptionSection(uuidFactory.create(), "<div>predefined desc</div>"))
       .setIsExternal(true)
       .setIsAdHoc(true)
       .setName("predefined name")
-      .setDescription("<div>predefined desc</div>")
       .setSeverity(Severity.BLOCKER)
-      .setType(RuleType.VULNERABILITY));
-    RuleMetadataDto metadata = db.rules().insertOrUpdateMetadata(externalRule, m -> m
+      .setType(RuleType.VULNERABILITY)
       .setAdHocName("adhoc name")
       .setAdHocDescription("<div>adhoc desc</div>")
       .setAdHocSeverity(Severity.MAJOR)
       .setAdHocType(RuleType.CODE_SMELL)
       .setNoteData(null)
-      .setNoteUserUuid(null));
-    doReturn("&lt;div&gt;adhoc desc&lt;/div&gt;").when(macroInterpreter).interpret(metadata.getAdHocDescription());
+      .setNoteUserUuid(null);
+    externalRule = db.rules().insert(externalRule);
+    doReturn("&lt;div&gt;adhoc desc&lt;/div&gt;").when(macroInterpreter).interpret(externalRule.getAdHocDescription());
 
     ShowResponse result = ws.newRequest()
       .setParam(PARAM_KEY, externalRule.getKey().toString())
@@ -366,14 +458,19 @@ public class ShowActionTest {
 
   @Test
   public void adhoc_info_are_empty_when_no_metadata() {
-    RuleDefinitionDto externalRule = db.rules().insert(r -> r
+    RuleDto externalRule = db.rules().insert(r -> r
       .setIsExternal(true)
       .setIsAdHoc(true)
       .setName(null)
-      .setDescription(null)
       .setDescriptionFormat(null)
       .setSeverity((String) null)
-      .setType(0));
+      .setNoteData(null)
+      .setNoteUserUuid(null)
+      .setAdHocDescription(null)
+      .setType(0)
+      .setAdHocSeverity(null)
+      .setAdHocName(null)
+      .setAdHocType(0));
 
     ShowResponse result = ws.newRequest()
       .setParam(PARAM_KEY, externalRule.getKey().toString())
@@ -387,9 +484,8 @@ public class ShowActionTest {
 
   @Test
   public void show_rule_with_activation() {
-    RuleDefinitionDto rule = db.rules().insert();
+    RuleDto rule = db.rules().insert(r -> r.setNoteData(null).setNoteUserUuid(null));
     RuleParamDto ruleParam = db.rules().insertRuleParam(rule, p -> p.setType("STRING").setDescription("Reg *exp*").setDefaultValue(".*"));
-    db.rules().insertOrUpdateMetadata(rule, m -> m.setNoteData(null).setNoteUserUuid(null));
     QProfileDto qProfile = db.qualityProfiles().insert();
     ActiveRuleDto activeRule = db.qualityProfiles().activateRule(qProfile, rule);
     db.getDbClient().activeRuleDao().insertParam(db.getSession(), activeRule, new ActiveRuleParamDto()
@@ -414,8 +510,7 @@ public class ShowActionTest {
 
   @Test
   public void show_rule_without_activation() {
-    RuleDefinitionDto rule = db.rules().insert();
-    db.rules().insertOrUpdateMetadata(rule, m -> m.setNoteData(null).setNoteUserUuid(null));
+    RuleDto rule = db.rules().insert(r -> r.setNoteData(null).setNoteUserUuid(null));
     QProfileDto qProfile = db.qualityProfiles().insert();
     db.qualityProfiles().activateRule(qProfile, rule);
 
@@ -442,4 +537,27 @@ public class ShowActionTest {
         tuple("actives", false));
   }
 
+  private RuleDescriptionSectionDto createRuleDescriptionSection(String key, String content) {
+    return createRuleDescriptionSectionWithContext(key, content, null);
+  }
+
+  private RuleDescriptionSectionDto createRuleDescriptionSectionWithContext(String key, String content, @Nullable String contextKey) {
+    RuleDescriptionSectionContextDto contextDto = Optional.ofNullable(contextKey)
+      .map(c -> RuleDescriptionSectionContextDto.of(contextKey, contextKey + " display name"))
+      .orElse(null);
+    return RuleDescriptionSectionDto.builder()
+      .uuid(uuidFactory.create())
+      .key(key)
+      .content(content)
+      .context(contextDto)
+      .build();
+  }
+
+  private RuleDto createRuleWithDescriptionSections(RuleDescriptionSectionDto... sections) {
+    var rule = newRuleWithoutDescriptionSection();
+    for (var section : sections) {
+      rule.addRuleDescriptionSectionDto(section);
+    }
+    return rule;
+  }
 }

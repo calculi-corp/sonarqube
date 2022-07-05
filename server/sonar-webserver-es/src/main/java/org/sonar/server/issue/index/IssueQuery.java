@@ -28,7 +28,7 @@ import java.util.Set;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
 import org.apache.commons.lang.builder.ReflectionToStringBuilder;
-import org.sonar.db.rule.RuleDefinitionDto;
+import org.sonar.db.rule.RuleDto;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static org.sonar.server.es.SearchOptions.MAX_PAGE_SIZE;
@@ -66,13 +66,12 @@ public class IssueQuery {
   private final Collection<String> statuses;
   private final Collection<String> resolutions;
   private final Collection<String> components;
-  private final Collection<String> modules;
   private final Collection<String> moduleRoots;
   private final Collection<String> projects;
   private final Collection<String> directories;
   private final Collection<String> files;
   private final Collection<String> views;
-  private final Collection<RuleDefinitionDto> rules;
+  private final Collection<RuleDto> rules;
   private final Collection<String> ruleUuids;
   private final Collection<String> assignees;
   private final Collection<String> authors;
@@ -107,7 +106,6 @@ public class IssueQuery {
     this.statuses = defaultCollection(builder.statuses);
     this.resolutions = defaultCollection(builder.resolutions);
     this.components = defaultCollection(builder.components);
-    this.modules = defaultCollection(builder.modules);
     this.moduleRoots = defaultCollection(builder.moduleRoots);
     this.projects = defaultCollection(builder.projects);
     this.directories = defaultCollection(builder.directories);
@@ -163,10 +161,6 @@ public class IssueQuery {
     return components;
   }
 
-  public Collection<String> moduleUuids() {
-    return modules;
-  }
-
   public Collection<String> moduleRootUuids() {
     return moduleRoots;
   }
@@ -187,7 +181,7 @@ public class IssueQuery {
     return views;
   }
 
-  public Collection<RuleDefinitionDto> rules() {
+  public Collection<RuleDto> rules() {
     return rules;
   }
 
@@ -326,13 +320,12 @@ public class IssueQuery {
     private Collection<String> statuses;
     private Collection<String> resolutions;
     private Collection<String> components;
-    private Collection<String> modules;
     private Collection<String> moduleRoots;
     private Collection<String> projects;
     private Collection<String> directories;
     private Collection<String> files;
     private Collection<String> views;
-    private Collection<RuleDefinitionDto> rules;
+    private Collection<RuleDto> rules;
     private Collection<String> ruleUuids;
     private Collection<String> assigneeUuids;
     private Collection<String> authors;
@@ -390,11 +383,6 @@ public class IssueQuery {
       return this;
     }
 
-    public Builder moduleUuids(@Nullable Collection<String> l) {
-      this.modules = l;
-      return this;
-    }
-
     public Builder moduleRootUuids(@Nullable Collection<String> l) {
       this.moduleRoots = l;
       return this;
@@ -420,7 +408,7 @@ public class IssueQuery {
       return this;
     }
 
-    public Builder rules(@Nullable Collection<RuleDefinitionDto> rules) {
+    public Builder rules(@Nullable Collection<RuleDto> rules) {
       this.rules = rules;
       return this;
     }

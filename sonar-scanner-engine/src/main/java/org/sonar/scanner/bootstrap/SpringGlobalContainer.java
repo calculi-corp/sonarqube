@@ -28,7 +28,6 @@ import org.sonar.api.CoreProperties;
 import org.sonar.api.Plugin;
 import org.sonar.api.SonarEdition;
 import org.sonar.api.SonarQubeSide;
-import org.sonar.api.SonarQubeVersion;
 import org.sonar.api.internal.MetadataLoader;
 import org.sonar.api.internal.SonarRuntimeImpl;
 import org.sonar.api.utils.MessageException;
@@ -43,6 +42,7 @@ import org.sonar.core.platform.PluginClassLoader;
 import org.sonar.core.platform.PluginClassloaderFactory;
 import org.sonar.core.platform.PluginInfo;
 import org.sonar.core.platform.PluginRepository;
+import org.sonar.core.platform.SonarQubeVersion;
 import org.sonar.core.platform.SpringComponentContainer;
 import org.sonar.core.util.DefaultHttpDownloader;
 import org.sonar.core.util.UuidFactoryImpl;
@@ -79,10 +79,11 @@ public class SpringGlobalContainer extends SpringComponentContainer {
   }
 
   private void addBootstrapComponents() {
-    Version apiVersion = MetadataLoader.loadVersion(System2.INSTANCE);
+    Version apiVersion = MetadataLoader.loadApiVersion(System2.INSTANCE);
+    Version sqVersion = MetadataLoader.loadSQVersion(System2.INSTANCE);
     SonarEdition edition = MetadataLoader.loadEdition(System2.INSTANCE);
     DefaultAnalysisWarnings analysisWarnings = new DefaultAnalysisWarnings(System2.INSTANCE);
-    LOG.debug("{} {}", edition.getLabel(), apiVersion);
+    LOG.debug("{} {}", edition.getLabel(), sqVersion);
     add(
       // plugins
       ScannerPluginRepository.class,
@@ -90,7 +91,7 @@ public class SpringGlobalContainer extends SpringComponentContainer {
       PluginClassloaderFactory.class,
       ScannerPluginJarExploder.class,
       ExtensionInstaller.class,
-      new SonarQubeVersion(apiVersion),
+      new SonarQubeVersion(sqVersion),
       new GlobalServerSettingsProvider(),
       new GlobalConfigurationProvider(),
       new ScannerWsClientProvider(),

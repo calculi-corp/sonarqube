@@ -18,7 +18,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
-import { Link } from 'react-router';
+import { Link } from 'react-router-dom';
 import { DropdownOverlay } from '../../../../../components/controls/Dropdown';
 import SearchBox from '../../../../../components/controls/SearchBox';
 import { Router, withRouter } from '../../../../../components/hoc/withRouter';
@@ -28,9 +28,9 @@ import {
   isPullRequest,
   isSameBranchLike
 } from '../../../../../helpers/branch-like';
-import { KeyboardCodes } from '../../../../../helpers/keycodes';
+import { KeyboardKeys } from '../../../../../helpers/keycodes';
 import { translate } from '../../../../../helpers/l10n';
-import { getBranchLikeUrl } from '../../../../../helpers/urls';
+import { getBranchLikeUrl, queryToSearch } from '../../../../../helpers/urls';
 import { BranchLike, BranchLikeTree } from '../../../../../types/branch-like';
 import { ComponentQualifier } from '../../../../../types/component';
 import { Component } from '../../../../../types/types';
@@ -42,7 +42,7 @@ interface Props {
   component: Component;
   currentBranchLike: BranchLike;
   onClose: () => void;
-  router: Pick<Router, 'push'>;
+  router: Router;
 }
 
 interface State {
@@ -110,16 +110,16 @@ export class Menu extends React.PureComponent<Props, State> {
   };
 
   handleKeyDown = (event: React.KeyboardEvent) => {
-    switch (event.nativeEvent.code) {
-      case KeyboardCodes.Enter:
+    switch (event.nativeEvent.key) {
+      case KeyboardKeys.Enter:
         event.preventDefault();
         this.openHighlightedBranchLike();
         break;
-      case KeyboardCodes.UpArrow:
+      case KeyboardKeys.UpArrow:
         event.preventDefault();
         this.highlightSiblingBranchlike(-1);
         break;
-      case KeyboardCodes.DownArrow:
+      case KeyboardKeys.DownArrow:
         event.preventDefault();
         this.highlightSiblingBranchlike(+1);
         break;
@@ -190,7 +190,7 @@ export class Menu extends React.PureComponent<Props, State> {
           <div className="hint-container text-right">
             <Link
               onClick={() => onClose()}
-              to={{ pathname: '/project/branches', query: { id: component.key } }}>
+              to={{ pathname: '/project/branches', search: queryToSearch({ id: component.key }) }}>
               {translate('branch_like_navigation.manage')}
             </Link>
           </div>

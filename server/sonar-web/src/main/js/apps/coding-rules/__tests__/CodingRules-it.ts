@@ -62,11 +62,146 @@ it('should open with permalink', async () => {
   expect(screen.queryByRole('link', { name: 'Hot hotspot' })).not.toBeInTheDocument();
 });
 
-it('should show open rule', async () => {
+it('should show open rule with default description section', async () => {
   renderCodingRulesApp(undefined, 'coding_rules?open=rule1');
   expect(
     await screen.findByRole('heading', { level: 3, name: 'Awsome java rule' })
   ).toBeInTheDocument();
+  expect(screen.getByText('Why')).toBeInTheDocument();
+  expect(screen.getByText('Because')).toBeInTheDocument();
+});
+
+it('should show open rule with no description', async () => {
+  renderCodingRulesApp(undefined, 'coding_rules?open=rule6');
+  expect(
+    await screen.findByRole('heading', { level: 3, name: 'Bad Python rule' })
+  ).toBeInTheDocument();
+  expect(screen.getByText('issue.external_issue_description.Bad Python rule')).toBeInTheDocument();
+});
+
+it('should show hotspot rule section', async () => {
+  const user = userEvent.setup();
+  renderCodingRulesApp(undefined, 'coding_rules?open=rule2');
+  expect(await screen.findByRole('heading', { level: 3, name: 'Hot hotspot' })).toBeInTheDocument();
+  expect(screen.getByText('Introduction to this rule')).toBeInTheDocument();
+  expect(
+    screen.getByRole('button', {
+      name: 'coding_rules.description_section.title.root_cause.SECURITY_HOTSPOT'
+    })
+  ).toBeInTheDocument();
+  expect(
+    screen.getByRole('button', {
+      name: 'coding_rules.description_section.title.assess_the_problem'
+    })
+  ).toBeInTheDocument();
+  expect(
+    screen.getByRole('button', {
+      name: 'coding_rules.description_section.title.resources'
+    })
+  ).toBeInTheDocument();
+  // Check that we render plain html
+  await user.click(
+    screen.getByRole('button', {
+      name: 'coding_rules.description_section.title.resources'
+    })
+  );
+  expect(screen.getByRole('link', { name: 'Awsome Reading' })).toBeInTheDocument();
+});
+
+it('should show rule advanced section', async () => {
+  const user = userEvent.setup();
+  renderCodingRulesApp(undefined, 'coding_rules?open=rule5');
+  expect(
+    await screen.findByRole('heading', { level: 3, name: 'Awsome Python rule' })
+  ).toBeInTheDocument();
+  expect(screen.getByText('Introduction to this rule')).toBeInTheDocument();
+  expect(
+    screen.getByRole('button', {
+      name: 'coding_rules.description_section.title.how_to_fix'
+    })
+  ).toBeInTheDocument();
+  expect(
+    screen.getByRole('button', {
+      name: 'coding_rules.description_section.title.resources'
+    })
+  ).toBeInTheDocument();
+  // Check that we render plain html
+  await user.click(
+    screen.getByRole('button', {
+      name: 'coding_rules.description_section.title.resources'
+    })
+  );
+  expect(screen.getByRole('link', { name: 'Awsome Reading' })).toBeInTheDocument();
+});
+
+it('should show rule advanced section with context', async () => {
+  const user = userEvent.setup();
+  renderCodingRulesApp(undefined, 'coding_rules?open=rule7');
+  expect(
+    await screen.findByRole('heading', { level: 3, name: 'Python rule with context' })
+  ).toBeInTheDocument();
+  expect(
+    screen.getByRole('button', {
+      name: 'coding_rules.description_section.title.how_to_fix'
+    })
+  ).toBeInTheDocument();
+
+  await user.click(
+    screen.getByRole('button', {
+      name: 'coding_rules.description_section.title.how_to_fix'
+    })
+  );
+  expect(screen.getByRole('radio', { name: 'Spring' })).toBeInTheDocument();
+  expect(screen.getByRole('radio', { name: 'Spring boot' })).toBeInTheDocument();
+  expect(
+    screen.getByRole('radio', { name: 'coding_rules.description_context_other' })
+  ).toBeInTheDocument();
+  expect(screen.getByText('This how to fix for spring')).toBeInTheDocument();
+
+  await user.click(screen.getByRole('radio', { name: 'Spring boot' }));
+  expect(screen.getByText('This how to fix for spring boot')).toBeInTheDocument();
+
+  await user.click(screen.getByRole('radio', { name: 'coding_rules.description_context_other' }));
+  expect(screen.getByText('coding_rules.context.others.title')).toBeInTheDocument();
+  expect(screen.getByText('coding_rules.context.others.description.first')).toBeInTheDocument();
+  expect(screen.getByText('coding_rules.context.others.description.second')).toBeInTheDocument();
+});
+
+it('should be able to extend the rule description', async () => {
+  const user = userEvent.setup();
+  handler.setIsAdmin();
+  renderCodingRulesApp(undefined, 'coding_rules?open=rule5');
+  expect(
+    await screen.findByRole('heading', { level: 3, name: 'Awsome Python rule' })
+  ).toBeInTheDocument();
+
+  // Add
+  await user.click(screen.getByRole('button', { name: 'coding_rules.extend_description' }));
+  expect(screen.getByRole('textbox')).toBeInTheDocument();
+  await user.click(screen.getByRole('textbox'));
+  await user.keyboard('TEST DESC');
+  await user.click(screen.getByRole('button', { name: 'save' }));
+  expect(await screen.findByText('TEST DESC')).toBeInTheDocument();
+
+  // Edit
+  await user.click(screen.getByRole('button', { name: 'coding_rules.extend_description' }));
+  await user.click(screen.getByRole('textbox'));
+  await user.keyboard('{Control>}A{/Control}NEW DESC');
+  await user.click(screen.getByRole('button', { name: 'save' }));
+  expect(await screen.findByText('NEW DESC')).toBeInTheDocument();
+
+  //Cancel
+  await user.click(screen.getByRole('button', { name: 'coding_rules.extend_description' }));
+  await user.dblClick(screen.getByRole('textbox'));
+  await user.keyboard('DIFFERENCE');
+  await user.click(screen.getByRole('button', { name: 'cancel' }));
+  expect(await screen.findByText('NEW DESC')).toBeInTheDocument();
+
+  //Remove
+  await user.click(screen.getByRole('button', { name: 'coding_rules.extend_description' }));
+  await user.click(screen.getByRole('button', { name: 'remove' }));
+  await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'remove' }));
+  await waitFor(() => expect(screen.queryByText('NEW DESC')).not.toBeInTheDocument());
 });
 
 it('should list all rules', async () => {
@@ -140,7 +275,7 @@ it('should be able to bulk activate quality profile', async () => {
   await user.click(await screen.findByRole('link', { name: 'coding_rules.activate_in…' }));
 
   const dialog = screen.getByRole('dialog', {
-    name: 'coding_rules.activate_in_quality_profile (4 coding_rules._rules)'
+    name: `coding_rules.activate_in_quality_profile (${handler.allRulesCount()} coding_rules._rules)`
   });
   expect(dialog).toBeInTheDocument();
 
@@ -171,7 +306,7 @@ it('should be able to bulk activate quality profile', async () => {
   await user.click(await screen.findByRole('link', { name: 'coding_rules.activate_in…' }));
   dialogScreen = within(
     screen.getByRole('dialog', {
-      name: 'coding_rules.activate_in_quality_profile (4 coding_rules._rules)'
+      name: `coding_rules.activate_in_quality_profile (${handler.allRulesCount()} coding_rules._rules)`
     })
   );
   await user.click(dialogScreen.getByRole('textbox', { name: 'coding_rules.activate_in' }));
@@ -199,7 +334,7 @@ it('should be able to bulk deactivate quality profile', async () => {
   await user.click(await screen.findByRole('link', { name: 'coding_rules.deactivate_in…' }));
   const dialogScreen = within(
     screen.getByRole('dialog', {
-      name: 'coding_rules.deactivate_in_quality_profile (4 coding_rules._rules)'
+      name: `coding_rules.deactivate_in_quality_profile (${handler.allRulesCount()} coding_rules._rules)`
     })
   );
   await user.click(dialogScreen.getByRole('textbox', { name: 'coding_rules.deactivate_in' }));
@@ -213,6 +348,16 @@ it('should be able to bulk deactivate quality profile', async () => {
       }`
     )
   ).toBeInTheDocument();
+});
+
+it('should handle hash parameters', async () => {
+  renderCodingRulesApp(mockLoggedInUser(), 'coding_rules#languages=c,js|types=BUG');
+
+  // 2 languages
+  expect(await screen.findByText('x_selected.2')).toBeInTheDocument();
+  expect(screen.getAllByTitle('issue.type.BUG')).toHaveLength(2);
+  // Only 3 rules shown
+  expect(screen.getByText('x_of_y_shown.3.3')).toBeInTheDocument();
 });
 
 function renderCodingRulesApp(currentUser?: CurrentUser, navigateTo?: string) {

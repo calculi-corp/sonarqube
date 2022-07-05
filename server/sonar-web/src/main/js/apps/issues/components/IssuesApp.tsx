@@ -18,14 +18,15 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import styled from '@emotion/styled';
-import key from 'keymaster';
+import classNames from 'classnames';
 import { debounce, keyBy, omit, without } from 'lodash';
 import * as React from 'react';
 import { Helmet } from 'react-helmet-async';
 import { FormattedMessage } from 'react-intl';
 import { searchIssues } from '../../../api/issues';
-import A11ySkipTarget from '../../../app/components/a11y/A11ySkipTarget';
-import Suggestions from '../../../app/components/embed-docs-modal/Suggestions';
+import { getRuleDetails } from '../../../api/rules';
+import withComponentContext from '../../../app/components/componentContext/withComponentContext';
+import A11ySkipTarget from '../../../components/a11y/A11ySkipTarget';
 import EmptySearch from '../../../components/common/EmptySearch';
 import FiltersHeader from '../../../components/common/FiltersHeader';
 import ScreenPositionHelper from '../../../components/common/ScreenPositionHelper';
@@ -33,6 +34,7 @@ import { Button } from '../../../components/controls/buttons';
 import Checkbox from '../../../components/controls/Checkbox';
 import HelpTooltip from '../../../components/controls/HelpTooltip';
 import ListFooter from '../../../components/controls/ListFooter';
+import Suggestions from '../../../components/embed-docs-modal/Suggestions';
 import { Location, Router } from '../../../components/hoc/withRouter';
 import '../../../components/search-navigator.css';
 import { Alert } from '../../../components/ui/Alert';
@@ -45,7 +47,8 @@ import {
 } from '../../../helpers/branch-like';
 import handleRequiredAuthentication from '../../../helpers/handleRequiredAuthentication';
 import { parseIssueFromResponse } from '../../../helpers/issues';
-import { KeyboardCodes, KeyboardKeys } from '../../../helpers/keycodes';
+import { isInput, isShortcut } from '../../../helpers/keyboardEventHelpers';
+import { KeyboardKeys } from '../../../helpers/keycodes';
 import { translate, translateWithParameters } from '../../../helpers/l10n';
 import {
   addSideBarClass,
@@ -64,7 +67,7 @@ import {
   ReferencedRule
 } from '../../../types/issues';
 import { SecurityStandard } from '../../../types/security';
-import { Component, Dict, Issue, Paging, RawQuery } from '../../../types/types';
+import { Component, Dict, Issue, Paging, RawQuery, RuleDetails } from '../../../types/types';
 import { CurrentUser, UserBase } from '../../../types/users';
 import * as actions from '../actions';
 import ConciseIssuesList from '../conciseIssuesList/ConciseIssuesList';
@@ -75,6 +78,7 @@ import {
   areMyIssuesSelected,
   areQueriesEqual,
   getOpen,
+  getOpenIssue,
   parseFacets,
   parseQuery,
   Query,
@@ -89,6 +93,7 @@ import {
 import BulkChangeModal, { MAX_PAGE_SIZE } from './BulkChangeModal';
 import IssuesList from './IssuesList';
 import IssuesSourceViewer from './IssuesSourceViewer';
+import IssueTabViewer from './IssueTabViewer';
 import MyIssuesFilter from './MyIssuesFilter';
 import NoIssues from './NoIssues';
 import NoMyIssues from './NoMyIssues';
@@ -100,7 +105,7 @@ interface Props {
   currentUser: CurrentUser;
   fetchBranchStatus: (branchLike: BranchLike, projectKey: string) => void;
   location: Location;
-  router: Pick<Router, 'push' | 'replace'>;
+  router: Router;
 }
 
 export interface State {
@@ -112,6 +117,7 @@ export interface State {
   facets: Dict<Facet>;
   issues: Issue[];
   loading: boolean;
+  loadingRule: boolean;
   loadingFacets: Dict<boolean>;
   loadingMore: boolean;
   locationsNavigator: boolean;
@@ -119,6 +125,7 @@ export interface State {
   openFacets: Dict<boolean>;
   openIssue?: Issue;
   openPopup?: { issue: string; name: string };
+  openRuleDetails?: RuleDetails;
   paging?: Paging;
   query: Query;
   referencedComponentsById: Dict<ReferencedComponent>;
@@ -135,7 +142,7 @@ const DEFAULT_QUERY = { resolved: 'false' };
 const MAX_INITAL_FETCH = 1000;
 const BRANCH_STATUS_REFRESH_INTERVAL = 1000;
 
-export default class App extends React.PureComponent<Props, State> {
+export class App extends React.PureComponent<Props, State> {
   mounted = false;
 
   constructor(props: Props) {
@@ -148,6 +155,7 @@ export default class App extends React.PureComponent<Props, State> {
       issues: [],
       loading: true,
       loadingFacets: {},
+      loadingRule: false,
       loadingMore: false,
       locationsNavigator: false,
       myIssues: areMyIssuesSelected(props.location.query),
@@ -175,6 +183,18 @@ export default class App extends React.PureComponent<Props, State> {
     this.refreshBranchStatus = debounce(this.refreshBranchStatus, BRANCH_STATUS_REFRESH_INTERVAL);
   }
 
+  static getDerivedStateFromProps(props: Props, state: State) {
+    const {
+      location: { query }
+    } = props;
+
+    return {
+      myIssues: areMyIssuesSelected(query),
+      query: parseQuery(query),
+      openIssue: getOpenIssue(props, state.issues)
+    };
+  }
+
   componentDidMount() {
     this.mounted = true;
 
@@ -189,33 +209,11 @@ export default class App extends React.PureComponent<Props, State> {
     this.fetchFirstIssues();
   }
 
-  componentWillReceiveProps(nextProps: Props) {
-    const { issues, selected } = this.state;
-    const openIssue = this.getOpenIssue(nextProps, issues);
-
-    if (openIssue && openIssue.key !== selected) {
-      this.setState({
-        locationsNavigator: false,
-        selected: openIssue.key,
-        selectedFlowIndex: undefined,
-        selectedLocationIndex: undefined
-      });
-    }
-
-    if (!openIssue) {
-      this.setState({ selectedFlowIndex: undefined, selectedLocationIndex: undefined });
-    }
-
-    this.setState({
-      myIssues: areMyIssuesSelected(nextProps.location.query),
-      openIssue,
-      query: parseQuery(nextProps.location.query)
-    });
-  }
-
   componentDidUpdate(prevProps: Props, prevState: State) {
     const { query } = this.props.location;
     const { query: prevQuery } = prevProps.location;
+    const { openIssue } = this.state;
+
     if (
       prevProps.component !== this.props.component ||
       !isSameBranchLike(prevProps.branchLike, this.props.branchLike) ||
@@ -231,6 +229,16 @@ export default class App extends React.PureComponent<Props, State> {
       // if user simply selected another issue
       // or if user went from the source code back to the list of issues
       this.scrollToSelectedIssue();
+    } else if (openIssue && openIssue.key !== this.state.selected) {
+      this.setState({
+        locationsNavigator: false,
+        selected: openIssue.key,
+        selectedFlowIndex: undefined,
+        selectedLocationIndex: undefined
+      });
+    }
+    if (this.state.openIssue && this.state.openIssue.key !== prevState.openIssue?.key) {
+      this.loadRule();
     }
   }
 
@@ -242,61 +250,72 @@ export default class App extends React.PureComponent<Props, State> {
   }
 
   attachShortcuts() {
-    key.setScope('issues');
-    key('up', 'issues', () => {
-      this.selectPreviousIssue();
-      return false;
-    });
-    key('down', 'issues', () => {
-      this.selectNextIssue();
-      return false;
-    });
-    key('right', 'issues', () => {
-      this.openSelectedIssue();
-      return false;
-    });
-    key('left', 'issues', () => {
-      if (this.state.query.issues.length !== 1) {
-        this.closeIssue();
-      }
-      return false;
-    });
-    window.addEventListener('keydown', this.handleKeyDown);
-    window.addEventListener('keyup', this.handleKeyUp);
+    document.addEventListener('keydown', this.handleKeyDown);
+    document.addEventListener('keyup', this.handleKeyUp);
   }
 
   detachShortcuts() {
-    key.deleteScope('issues');
-    window.removeEventListener('keydown', this.handleKeyDown);
-    window.removeEventListener('keyup', this.handleKeyUp);
+    document.removeEventListener('keydown', this.handleKeyDown);
+    document.removeEventListener('keyup', this.handleKeyUp);
   }
 
   handleKeyDown = (event: KeyboardEvent) => {
-    if (key.getScope() !== 'issues') {
+    // Ignore if modal is open
+    if (this.state.bulkChangeModal) {
       return;
     }
+
+    if (isInput(event) || isShortcut(event)) {
+      return true;
+    }
+
     if (event.key === KeyboardKeys.Alt) {
       event.preventDefault();
       this.setState(actions.enableLocationsNavigator);
-    } else if (event.code === KeyboardCodes.DownArrow && event.altKey) {
-      event.preventDefault();
-      this.selectNextLocation();
-    } else if (event.code === KeyboardCodes.UpArrow && event.altKey) {
-      event.preventDefault();
-      this.selectPreviousLocation();
-    } else if (event.code === KeyboardCodes.LeftArrow && event.altKey) {
-      event.preventDefault();
-      this.selectPreviousFlow();
-    } else if (event.code === KeyboardCodes.RightArrow && event.altKey) {
-      event.preventDefault();
-      this.selectNextFlow();
+      return;
+    }
+
+    switch (event.key) {
+      case KeyboardKeys.DownArrow: {
+        event.preventDefault();
+        if (event.altKey) {
+          this.selectNextLocation();
+        } else {
+          this.selectNextIssue();
+        }
+        break;
+      }
+      case KeyboardKeys.UpArrow: {
+        event.preventDefault();
+        if (event.altKey) {
+          this.selectPreviousLocation();
+        } else {
+          this.selectPreviousIssue();
+        }
+        break;
+      }
+      case KeyboardKeys.LeftArrow: {
+        event.preventDefault();
+        if (event.altKey) {
+          this.selectPreviousFlow();
+        } else {
+          this.closeIssue();
+        }
+        break;
+      }
+      case KeyboardKeys.RightArrow: {
+        event.preventDefault();
+        if (event.altKey) {
+          this.selectNextFlow();
+        } else {
+          this.openSelectedIssue();
+        }
+        break;
+      }
     }
   };
 
   handleKeyUp = (event: KeyboardEvent) => {
-    if (key.getScope() !== 'issues') {
-      return;
-    }
     if (event.key === KeyboardKeys.Alt) {
       this.setState(actions.disableLocationsNavigator);
     }
@@ -307,11 +326,6 @@ export default class App extends React.PureComponent<Props, State> {
     const index = issues.findIndex(issue => issue.key === selected);
     return index !== -1 ? index : undefined;
   }
-
-  getOpenIssue = (props: Props, issues: Issue[]) => {
-    const open = getOpen(props.location.query);
-    return open ? issues.find(issue => issue.key === open) : undefined;
-  };
 
   selectNextIssue = () => {
     const { issues } = this.state;
@@ -328,6 +342,20 @@ export default class App extends React.PureComponent<Props, State> {
       }
     }
   };
+
+  async loadRule() {
+    const { openIssue } = this.state;
+    if (openIssue === undefined) {
+      return;
+    }
+    this.setState({ loadingRule: true });
+    const openRuleDetails = await getRuleDetails({ key: openIssue.rule })
+      .then(response => response.rule)
+      .catch(() => undefined);
+    if (this.mounted) {
+      this.setState({ loadingRule: false, openRuleDetails });
+    }
+  }
 
   selectPreviousIssue = () => {
     const { issues } = this.state;
@@ -477,7 +505,7 @@ export default class App extends React.PureComponent<Props, State> {
     return fetchPromise.then(
       ({ effortTotal, facets, issues, paging, ...other }) => {
         if (this.mounted && areQueriesEqual(prevQuery, this.props.location.query)) {
-          const openIssue = this.getOpenIssue(this.props, issues);
+          const openIssue = getOpenIssue(this.props, issues);
           let selected: string | undefined = undefined;
           if (issues.length > 0) {
             selected = openIssue ? openIssue.key : issues[0].key;
@@ -555,52 +583,6 @@ export default class App extends React.PureComponent<Props, State> {
         if (this.mounted) {
           this.setState({ loadingMore: false });
         }
-      }
-    );
-  };
-
-  fetchIssuesForComponent = (_component: string, _from: number, to: number) => {
-    const { issues, openIssue, paging } = this.state;
-
-    if (!openIssue || !paging) {
-      return Promise.reject(undefined);
-    }
-
-    const isSameComponent = (issue: Issue) => issue.component === openIssue.component;
-
-    const done = (pageIssues: Issue[], p: Paging) => {
-      const lastIssue = pageIssues[pageIssues.length - 1];
-      if (p.total <= p.pageIndex * p.pageSize) {
-        return true;
-      }
-      if (lastIssue.component !== openIssue.component) {
-        return true;
-      }
-      return lastIssue.textRange !== undefined && lastIssue.textRange.endLine > to;
-    };
-
-    if (done(issues, paging)) {
-      return Promise.resolve(issues.filter(isSameComponent));
-    }
-
-    this.setState({ loading: true });
-    return this.fetchIssuesUntil(paging.pageIndex + 1, done).then(
-      response => {
-        const nextIssues = [...issues, ...response.issues];
-        if (this.mounted) {
-          this.setState({
-            issues: nextIssues,
-            loading: false,
-            paging: response.paging
-          });
-        }
-        return nextIssues.filter(isSameComponent);
-      },
-      () => {
-        if (this.mounted) {
-          this.setState({ loading: false });
-        }
-        return [];
       }
     );
   };
@@ -791,18 +773,15 @@ export default class App extends React.PureComponent<Props, State> {
   handleIssueChange = (issue: Issue) => {
     this.refreshBranchStatus();
     this.setState(state => ({
-      issues: state.issues.map(candidate => (candidate.key === issue.key ? issue : candidate)),
-      openIssue: state.openIssue && state.openIssue.key === issue.key ? issue : state.openIssue
+      issues: state.issues.map(candidate => (candidate.key === issue.key ? issue : candidate))
     }));
   };
 
   handleOpenBulkChange = () => {
-    key.setScope('issues-bulk-change');
     this.setState({ bulkChangeModal: true });
   };
 
   handleCloseBulkChange = () => {
-    key.setScope('issues');
     this.setState({ bulkChangeModal: false });
   };
 
@@ -1090,44 +1069,62 @@ export default class App extends React.PureComponent<Props, State> {
   }
 
   renderPage() {
-    const { cannotShowOpenIssue, checkAll, issues, loading, openIssue, paging } = this.state;
+    const {
+      cannotShowOpenIssue,
+      openRuleDetails,
+      checkAll,
+      issues,
+      loading,
+      openIssue,
+      paging,
+      loadingRule
+    } = this.state;
+    const { component } = this.props;
     return (
       <div className="layout-page-main-inner">
-        {openIssue ? (
-          <IssuesSourceViewer
-            branchLike={fillBranchLike(openIssue.branch, openIssue.pullRequest)}
-            issues={issues}
-            loadIssues={this.fetchIssuesForComponent}
-            locationsNavigator={this.state.locationsNavigator}
-            onIssueChange={this.handleIssueChange}
-            onIssueSelect={this.openIssue}
-            onLocationSelect={this.selectLocation}
-            openIssue={openIssue}
-            selectedFlowIndex={this.state.selectedFlowIndex}
-            selectedLocationIndex={this.state.selectedLocationIndex}
-          />
-        ) : (
-          <DeferredSpinner loading={loading}>
-            {checkAll && paging && paging.total > MAX_PAGE_SIZE && (
-              <Alert className="big-spacer-bottom" variant="warning">
-                <FormattedMessage
-                  defaultMessage={translate('issue_bulk_change.max_issues_reached')}
-                  id="issue_bulk_change.max_issues_reached"
-                  values={{ max: <strong>{MAX_PAGE_SIZE}</strong> }}
+        <DeferredSpinner loading={loadingRule}>
+          {openIssue && openRuleDetails ? (
+            <IssueTabViewer
+              codeTabContent={
+                <IssuesSourceViewer
+                  branchLike={fillBranchLike(openIssue.branch, openIssue.pullRequest)}
+                  issues={issues}
+                  locationsNavigator={this.state.locationsNavigator}
+                  onIssueChange={this.handleIssueChange}
+                  onIssueSelect={this.openIssue}
+                  onLocationSelect={this.selectLocation}
+                  openIssue={openIssue}
+                  selectedFlowIndex={this.state.selectedFlowIndex}
+                  selectedLocationIndex={this.state.selectedLocationIndex}
                 />
-              </Alert>
-            )}
-            {cannotShowOpenIssue && (!paging || paging.total > 0) && (
-              <Alert className="big-spacer-bottom" variant="warning">
-                {translateWithParameters(
-                  'issues.cannot_open_issue_max_initial_X_fetched',
-                  MAX_INITAL_FETCH
-                )}
-              </Alert>
-            )}
-            {this.renderList()}
-          </DeferredSpinner>
-        )}
+              }
+              issue={openIssue}
+              component={component}
+              ruleDetails={openRuleDetails}
+            />
+          ) : (
+            <DeferredSpinner loading={loading}>
+              {checkAll && paging && paging.total > MAX_PAGE_SIZE && (
+                <Alert className="big-spacer-bottom" variant="warning">
+                  <FormattedMessage
+                    defaultMessage={translate('issue_bulk_change.max_issues_reached')}
+                    id="issue_bulk_change.max_issues_reached"
+                    values={{ max: <strong>{MAX_PAGE_SIZE}</strong> }}
+                  />
+                </Alert>
+              )}
+              {cannotShowOpenIssue && (!paging || paging.total > 0) && (
+                <Alert className="big-spacer-bottom" variant="warning">
+                  {translateWithParameters(
+                    'issues.cannot_open_issue_max_initial_X_fetched',
+                    MAX_INITAL_FETCH
+                  )}
+                </Alert>
+              )}
+              {this.renderList()}
+            </DeferredSpinner>
+          )}
+        </DeferredSpinner>
       </div>
     );
   }
@@ -1144,7 +1141,7 @@ export default class App extends React.PureComponent<Props, State> {
 
         {this.renderSide(openIssue)}
 
-        <div role="main" className="layout-page-main">
+        <div role="main" className={classNames('layout-page-main', { 'open-issue': !!openIssue })}>
           {this.renderHeader({ openIssue, paging, selectedIndex })}
 
           {this.renderPage()}
@@ -1158,3 +1155,5 @@ const AlertContent = styled.div`
   display: flex;
   align-items: center;
 `;
+
+export default withComponentContext(App);

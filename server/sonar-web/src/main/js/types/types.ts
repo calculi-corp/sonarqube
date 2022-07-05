@@ -18,6 +18,8 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
+import { RuleDescriptionSection } from '../apps/coding-rules/rule';
+import { ComponentQualifier } from './component';
 import { UserActive, UserBase } from './users';
 
 export type Dict<T> = { [key: string]: T };
@@ -213,8 +215,6 @@ export interface DuplicatedFile {
   name: string;
   project: string;
   projectName: string;
-  subProject?: string;
-  subProjectName?: string;
 }
 
 export type ExpandDirection = 'up' | 'down';
@@ -290,8 +290,6 @@ export interface Issue {
   secondaryLocations: FlowLocation[];
   severity: string;
   status: string;
-  subProject?: string;
-  subProjectName?: string;
   tags?: string[];
   textRange?: TextRange;
   transitions: string[];
@@ -565,6 +563,20 @@ export interface RuleActivation {
   severity: string;
 }
 
+export interface RulesUpdateRequest {
+  key: string;
+  markdown_description?: string;
+  markdown_note?: string;
+  name?: string;
+  params?: string;
+  remediation_fn_base_effort?: string;
+  remediation_fn_type?: string;
+  remediation_fy_gap_multiplier?: string;
+  severity?: string;
+  status?: string;
+  tags?: string;
+}
+
 export interface RuleDetails extends Rule {
   createdAt: string;
   debtOverloaded?: boolean;
@@ -575,6 +587,7 @@ export interface RuleDetails extends Rule {
   defaultDebtRemFnType?: string;
   defaultRemFnBaseEffort?: string;
   defaultRemFnType?: string;
+  descriptionSections?: RuleDescriptionSection[];
   effortToFixDescription?: string;
   htmlDesc?: string;
   htmlNote?: string;
@@ -645,12 +658,13 @@ export interface SourceViewerFile {
     lines?: string;
     tests?: string;
   };
+  canMarkAsFavorite?: boolean;
   path: string;
+  name?: string;
+  longName?: string;
   project: string;
   projectName: string;
-  q: string;
-  subProject?: string;
-  subProjectName?: string;
+  q: ComponentQualifier;
   uuid: string;
 }
 
@@ -765,17 +779,6 @@ export interface TextRange {
 
 export interface UserSelected extends UserActive {
   selected: boolean;
-}
-
-export interface UserToken {
-  name: string;
-  createdAt: string;
-  lastConnectionDate?: string;
-}
-
-export interface NewUserToken extends UserToken {
-  login: string;
-  token: string;
 }
 
 export type Visibility = 'public' | 'private';

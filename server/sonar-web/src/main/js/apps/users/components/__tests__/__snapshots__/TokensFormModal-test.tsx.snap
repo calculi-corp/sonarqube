@@ -4,6 +4,7 @@ exports[`should render correctly 1`] = `
 <Modal
   contentLabel="users.tokens"
   onRequestClose={[MockFunction]}
+  size="medium"
 >
   <header
     className="modal-head"
@@ -25,8 +26,9 @@ exports[`should render correctly 1`] = `
   <div
     className="modal-body modal-container"
   >
-    <TokensForm
+    <withCurrentUserContext(TokensForm)
       deleteConfirmation="inline"
+      displayTokenTypeInput={false}
       login="john.doe"
       updateTokensCount={[MockFunction]}
     />

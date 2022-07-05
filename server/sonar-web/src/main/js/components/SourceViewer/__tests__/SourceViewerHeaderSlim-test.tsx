@@ -20,7 +20,7 @@
 import { shallow } from 'enzyme';
 import * as React from 'react';
 import { mockMainBranch } from '../../../helpers/mocks/branch-like';
-import { mockSourceViewerFile } from '../../../helpers/testMocks';
+import { mockSourceViewerFile } from '../../../helpers/mocks/sources';
 import { ComponentQualifier } from '../../../types/component';
 import SourceViewerHeaderSlim, { Props } from '../SourceViewerHeaderSlim';
 
@@ -29,16 +29,12 @@ it('should render correctly', () => {
   expect(shallowRender({ linkToProject: false })).toMatchSnapshot('no link to project');
   expect(shallowRender({ displayProjectName: false })).toMatchSnapshot('no project name');
   expect(
-    shallowRender({ sourceViewerFile: mockSourceViewerFile({ q: ComponentQualifier.Project }) })
-  ).toMatchSnapshot('project root');
-});
-
-it('should render correctly for subproject', () => {
-  expect(
     shallowRender({
-      sourceViewerFile: mockSourceViewerFile({ subProject: 'foo', subProjectName: 'Foo' })
+      sourceViewerFile: mockSourceViewerFile('foo/bar.ts', 'my-project', {
+        q: ComponentQualifier.Project
+      })
     })
-  ).toMatchSnapshot();
+  ).toMatchSnapshot('project root');
 });
 
 function shallowRender(props: Partial<Props> = {}) {
@@ -47,7 +43,7 @@ function shallowRender(props: Partial<Props> = {}) {
       branchLike={mockMainBranch()}
       expandable={true}
       onExpand={jest.fn()}
-      sourceViewerFile={mockSourceViewerFile()}
+      sourceViewerFile={mockSourceViewerFile('foo/bar.ts', 'my-project')}
       {...props}
     />
   );

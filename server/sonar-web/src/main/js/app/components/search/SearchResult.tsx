@@ -18,8 +18,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
-import { Link } from 'react-router';
-import { ComponentQualifier } from '../../../../js/types/component';
+import { Link } from 'react-router-dom';
 import Tooltip from '../../../components/controls/Tooltip';
 import ClockIcon from '../../../components/icons/ClockIcon';
 import FavoriteIcon from '../../../components/icons/FavoriteIcon';
@@ -83,10 +82,7 @@ export default class SearchResult extends React.PureComponent<Props, State> {
   };
 
   renderProject = (component: ComponentResult) => {
-    if (
-      ComponentQualifier.SubProject !== (component.qualifier as ComponentQualifier) ||
-      component.project == null
-    ) {
+    if (component.project == null) {
       return null;
     }
 

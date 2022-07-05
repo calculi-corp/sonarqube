@@ -17,14 +17,15 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { Location, LocationDescriptor } from 'history';
-import { InjectedRouter } from 'react-router';
+import { To } from 'react-router-dom';
+import { RuleDescriptionSections } from '../apps/coding-rules/rule';
 import { DocumentationEntry } from '../apps/documentation/utils';
 import { Exporter, Profile } from '../apps/quality-profiles/types';
+import { Location, Router } from '../components/hoc/withRouter';
 import { AppState } from '../types/appstate';
 import { RuleRepository } from '../types/coding-rules';
 import { EditionKey } from '../types/editions';
-import { RawIssue } from '../types/issues';
+import { IssueType, RawIssue } from '../types/issues';
 import { Language } from '../types/languages';
 import { DumpStatus, DumpTask } from '../types/project-dump';
 import { TaskStatuses } from '../types/tasks';
@@ -49,9 +50,6 @@ import {
   RuleActivation,
   RuleDetails,
   RuleParameter,
-  SnippetsByComponent,
-  SourceLine,
-  SourceViewerFile,
   SysInfoBase,
   SysInfoCluster,
   SysInfoStandalone
@@ -299,38 +297,6 @@ export function mockCondition(overrides: Partial<Condition> = {}): Condition {
   };
 }
 
-export function mockSnippetsByComponent(
-  component = 'main.js',
-  lines: number[] = [16]
-): SnippetsByComponent {
-  const sources = lines.reduce((lines: { [key: number]: SourceLine }, line) => {
-    lines[line] = mockSourceLine({ line });
-    return lines;
-  }, {});
-  return {
-    component: mockSourceViewerFile({
-      key: component,
-      path: component
-    }),
-    sources
-  };
-}
-
-export function mockSourceLine(overrides: Partial<SourceLine> = {}): SourceLine {
-  return {
-    line: 16,
-    code: '<span class="k">import</span> java.util.<span class="sym-9 sym">ArrayList</span>;',
-    coverageStatus: 'covered',
-    coveredConditions: 2,
-    scmRevision: '80f564becc0c0a1c9abaa006eca83a4fd278c3f0',
-    scmAuthor: 'simon.brandhof@sonarsource.com',
-    scmDate: '2018-12-11T10:48:39+0100',
-    duplicated: false,
-    isNew: true,
-    ...overrides
-  };
-}
-
 export function mockCurrentUser(overrides: Partial<CurrentUser> = {}): CurrentUser {
   return {
     isLoggedIn: false,
@@ -358,18 +324,9 @@ export function mockGroup(overrides: Partial<Group> = {}): Group {
   };
 }
 
-export function mockEvent(overrides = {}) {
-  return {
-    target: { blur() {} },
-    currentTarget: { blur() {} },
-    preventDefault() {},
-    stopPropagation() {},
-    ...overrides
-  } as any;
-}
-
 export function mockRawIssue(withLocations = false, overrides: Partial<RawIssue> = {}): RawIssue {
   const rawIssue: RawIssue = {
+    actions: [],
     component: 'main.js',
     key: 'AVsae-CQS-9G3txfbFN2',
     line: 25,
@@ -378,13 +335,21 @@ export function mockRawIssue(withLocations = false, overrides: Partial<RawIssue>
     severity: 'MAJOR',
     status: 'OPEN',
     textRange: { startLine: 25, endLine: 26, startOffset: 0, endOffset: 15 },
+    type: IssueType.CodeSmell,
     ...overrides
   };
 
   if (withLocations) {
     const loc = mockFlowLocation;
 
-    rawIssue.flows = [{ locations: [loc(), loc()] }];
+    rawIssue.flows = [
+      {
+        locations: [
+          loc({ component: overrides.component }),
+          loc({ component: overrides.component })
+        ]
+      }
+    ];
   }
 
   return {
@@ -437,7 +402,6 @@ export function mockIssue(withLocations = false, overrides: Partial<Issue> = {})
 
 export function mockLocation(overrides: Partial<Location> = {}): Location {
   return {
-    action: 'PUSH',
     hash: '',
     key: 'key',
     pathname: '/path',
@@ -553,8 +517,8 @@ export function mockQualityProfileExporter(override?: Partial<Exporter>): Export
 
 export function mockRouter(
   overrides: {
-    push?: (loc: LocationDescriptor) => void;
-    replace?: (loc: LocationDescriptor) => void;
+    push?: (loc: To) => void;
+    replace?: (loc: To) => void;
   } = {}
 ) {
   return {
@@ -568,7 +532,7 @@ export function mockRouter(
     replace: jest.fn(),
     setRouteLeaveHook: jest.fn(),
     ...overrides
-  } as InjectedRouter;
+  } as Router;
 }
 
 export function mockRule(overrides: Partial<Rule> = {}): Rule {
@@ -603,6 +567,12 @@ export function mockRuleDetails(overrides: Partial<RuleDetails> = {}): RuleDetai
     repo: 'squid',
     name: '".equals()" should not be used to test the values of "Atomic" classes',
     createdAt: '2014-12-16T17:26:54+0100',
+    descriptionSections: [
+      {
+        key: RuleDescriptionSections.DEFAULT,
+        content: '<b>Why</b> Because'
+      }
+    ],
     htmlDesc: '',
     mdDesc: '',
     severity: 'MAJOR',
@@ -636,24 +606,6 @@ export function mockRuleDetailsParameter(overrides: Partial<RuleParameter> = {})
     htmlDesc: 'description',
     key: '1',
     type: 'number',
-    ...overrides
-  };
-}
-
-export function mockSourceViewerFile(overrides: Partial<SourceViewerFile> = {}): SourceViewerFile {
-  return {
-    key: 'foo',
-    measures: {
-      coverage: '85.2',
-      duplicationDensity: '1.0',
-      issues: '12',
-      lines: '56'
-    },
-    path: 'foo/bar.ts',
-    project: 'my-project',
-    projectName: 'MyProject',
-    q: 'FIL',
-    uuid: 'foo-bar',
     ...overrides
   };
 }

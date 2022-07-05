@@ -21,8 +21,9 @@ import { shallow } from 'enzyme';
 import * as React from 'react';
 import { mockPullRequest } from '../../../../helpers/mocks/branch-like';
 import { mockComponent, mockComponentMeasure } from '../../../../helpers/mocks/component';
-import { mockIssue, mockRouter } from '../../../../helpers/testMocks';
+import { mockIssue, mockLocation, mockRouter } from '../../../../helpers/testMocks';
 import { waitAndUpdate } from '../../../../helpers/testUtils';
+import { queryToSearch } from '../../../../helpers/urls';
 import { ComponentQualifier } from '../../../../types/component';
 import { loadMoreChildren, retrieveComponent } from '../../utils';
 import { CodeApp } from '../CodeApp';
@@ -161,7 +162,7 @@ it('should handle go to parent correctly', async () => {
   expect(wrapper.state().highlighted).toBe(breadcrumb);
   expect(router.push).toHaveBeenCalledWith({
     pathname: '/code',
-    query: { id: 'foo', line: undefined, selected: 'key1' }
+    search: queryToSearch({ id: 'foo', line: undefined, selected: 'key1' })
   });
 });
 
@@ -214,14 +215,22 @@ it('should handle select correctly', () => {
   wrapper.instance().handleSelect(mockComponentMeasure(true, { refKey: 'test' }));
   expect(router.push).toHaveBeenCalledWith({
     pathname: '/dashboard',
-    query: { branch: undefined, id: 'test' }
+    search: queryToSearch({ branch: undefined, id: 'test', code_scope: 'new' })
   });
   expect(wrapper.state().highlighted).toBeUndefined();
 
-  wrapper.instance().handleSelect(mockComponentMeasure());
+  wrapper.setState({ newCodeSelected: false });
+
+  wrapper.instance().handleSelect(mockComponentMeasure(true, { refKey: 'test' }));
   expect(router.push).toHaveBeenCalledWith({
     pathname: '/dashboard',
-    query: { branch: undefined, id: 'test' }
+    search: queryToSearch({ branch: undefined, id: 'test', code_scope: 'overall' })
+  });
+
+  wrapper.instance().handleSelect(mockComponentMeasure());
+  expect(router.push).toHaveBeenCalledWith({
+    pathname: '/code',
+    search: queryToSearch({ id: 'foo', line: undefined, selected: 'foo' })
   });
 });
 
@@ -268,7 +277,7 @@ function shallowRender(props: Partial<CodeApp['props']> = {}) {
         qualifier: 'FOO'
       }}
       fetchBranchStatus={jest.fn()}
-      location={{ query: { branch: 'b', id: 'foo', line: '7' } }}
+      location={mockLocation({ search: queryToSearch({ branch: 'b', id: 'foo', line: '7' }) })}
       metrics={METRICS}
       router={mockRouter()}
       {...props}

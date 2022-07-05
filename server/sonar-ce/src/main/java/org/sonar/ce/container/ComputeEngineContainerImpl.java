@@ -25,7 +25,6 @@ import java.util.List;
 import javax.annotation.CheckForNull;
 import org.sonar.api.SonarEdition;
 import org.sonar.api.SonarQubeSide;
-import org.sonar.api.SonarQubeVersion;
 import org.sonar.api.config.EmailSettings;
 import org.sonar.api.internal.MetadataLoader;
 import org.sonar.api.internal.SonarRuntimeImpl;
@@ -48,12 +47,10 @@ import org.sonar.ce.CeTaskCommonsModule;
 import org.sonar.ce.StandaloneCeDistributedInformation;
 import org.sonar.ce.async.SynchronousAsyncExecution;
 import org.sonar.ce.cleaning.CeCleaningModule;
-import org.sonar.ce.cleaning.NoopCeCleaningSchedulerImpl;
 import org.sonar.ce.db.ReadOnlyPropertiesDao;
 import org.sonar.ce.issue.index.NoAsyncIssueIndexing;
 import org.sonar.ce.logging.CeProcessLogging;
 import org.sonar.ce.monitoring.CEQueueStatusImpl;
-import org.sonar.ce.monitoring.DistributedCEQueueStatusImpl;
 import org.sonar.ce.platform.CECoreExtensionsInstaller;
 import org.sonar.ce.platform.ComputeEngineExtensionInstaller;
 import org.sonar.ce.platform.DatabaseCompatibility;
@@ -76,6 +73,7 @@ import org.sonar.core.platform.EditionProvider;
 import org.sonar.core.platform.PlatformEditionProvider;
 import org.sonar.core.platform.PluginClassLoader;
 import org.sonar.core.platform.PluginClassloaderFactory;
+import org.sonar.core.platform.SonarQubeVersion;
 import org.sonar.core.platform.SpringComponentContainer;
 import org.sonar.core.util.UuidFactoryImpl;
 import org.sonar.db.DBSessionsImpl;
@@ -138,6 +136,7 @@ import org.sonar.server.qualitygate.notification.QGChangeEmailTemplate;
 import org.sonar.server.qualitygate.notification.QGChangeNotificationHandler;
 import org.sonar.server.qualityprofile.index.ActiveRuleIndexer;
 import org.sonar.server.rule.DefaultRuleFinder;
+import org.sonar.server.rule.RuleDescriptionFormatter;
 import org.sonar.server.rule.index.RuleIndex;
 import org.sonar.server.rule.index.RuleIndexer;
 import org.sonar.server.setting.DatabaseSettingLoader;
@@ -157,7 +156,6 @@ import static org.sonar.core.extension.CoreExtensionsInstaller.noAdditionalSideF
 import static org.sonar.core.extension.PlatformLevelPredicates.hasPlatformLevel;
 import static org.sonar.core.extension.PlatformLevelPredicates.hasPlatformLevel4OrNone;
 import static org.sonar.process.ProcessProperties.Property.CLUSTER_ENABLED;
-import static org.sonar.process.ProcessProperties.Property.SONARCLOUD_ENABLED;
 
 public class ComputeEngineContainerImpl implements ComputeEngineContainer {
 
@@ -269,13 +267,14 @@ public class ComputeEngineContainerImpl implements ComputeEngineContainer {
   }
 
   private static void populateLevel1(Container container, Props props, ComputeEngineStatus computeEngineStatus) {
-    Version apiVersion = MetadataLoader.loadVersion(System2.INSTANCE);
+    Version apiVersion = MetadataLoader.loadApiVersion(System2.INSTANCE);
+    Version sqVersion = MetadataLoader.loadSQVersion(System2.INSTANCE);
     SonarEdition edition = MetadataLoader.loadEdition(System2.INSTANCE);
     container.add(
       props.rawProperties(),
       ThreadLocalSettings.class,
       new ConfigurationProvider(),
-      new SonarQubeVersion(apiVersion),
+      new SonarQubeVersion(sqVersion),
       SonarRuntimeImpl.forSonarQube(apiVersion, SonarQubeSide.COMPUTE_ENGINE, edition),
       CeProcessLogging.class,
       UuidFactoryImpl.INSTANCE,
@@ -353,6 +352,7 @@ public class ComputeEngineContainerImpl implements ComputeEngineContainer {
 
   private static void populateLevel4(Container container, Props props) {
     container.add(
+      RuleDescriptionFormatter.class,
       ResourceTypes.class,
       DefaultResourceTypes.get(),
 
@@ -419,6 +419,7 @@ public class ComputeEngineContainerImpl implements ComputeEngineContainer {
 
       // System
       ServerLogging.class,
+      CEQueueStatusImpl.class,
 
       // SonarSource editions
       PlatformEditionProvider.class,
@@ -449,13 +450,7 @@ public class ComputeEngineContainerImpl implements ComputeEngineContainer {
 
     );
 
-    if (props.valueAsBoolean(SONARCLOUD_ENABLED.getKey())) {
-      // no cleaning job on sonarcloud and no distributed information
-      container.add(
-        NoopCeCleaningSchedulerImpl.class,
-        StandaloneCeDistributedInformation.class,
-        CEQueueStatusImpl.class);
-    } else if (props.valueAsBoolean(CLUSTER_ENABLED.getKey())) {
+    if (props.valueAsBoolean(CLUSTER_ENABLED.getKey())) {
       container.add(
         new CeCleaningModule(),
 
@@ -464,14 +459,11 @@ public class ComputeEngineContainerImpl implements ComputeEngineContainer {
 
         // system info
         DbSection.class,
-        ProcessInfoProvider.class,
-
-        DistributedCEQueueStatusImpl.class);
+        ProcessInfoProvider.class);
     } else {
       container.add(
         new CeCleaningModule(),
-        StandaloneCeDistributedInformation.class,
-        CEQueueStatusImpl.class);
+        StandaloneCeDistributedInformation.class);
     }
   }
 

@@ -88,12 +88,6 @@ public class UserDbTester {
     return updatedUser;
   }
 
-  public UserDto makeRoot(UserDto userDto) {
-    dbClient.userDao().setRoot(db.getSession(), userDto.getLogin(), true);
-    db.commit();
-    return dbClient.userDao().selectByLogin(db.getSession(), userDto.getLogin());
-  }
-
   public UserDto insertAdminByUserPermission() {
     UserDto user = insertUser();
     insertPermissionOnUser(user, ADMINISTER);
@@ -329,6 +323,17 @@ public class UserDbTester {
   @SafeVarargs
   public final UserTokenDto insertToken(UserDto user, Consumer<UserTokenDto>... populators) {
     UserTokenDto dto = UserTokenTesting.newUserToken().setUserUuid(user.getUuid());
+    stream(populators).forEach(p -> p.accept(dto));
+    db.getDbClient().userTokenDao().insert(db.getSession(), dto, user.getLogin());
+    db.commit();
+    return dto;
+  }
+
+  // PROJECT ANALYSIS TOKEN
+
+  @SafeVarargs
+  public final UserTokenDto insertProjectAnalysisToken(UserDto user, Consumer<UserTokenDto>... populators) {
+    UserTokenDto dto = UserTokenTesting.newProjectAnalysisToken().setUserUuid(user.getUuid());
     stream(populators).forEach(p -> p.accept(dto));
     db.getDbClient().userTokenDao().insert(db.getSession(), dto, user.getLogin());
     db.commit();

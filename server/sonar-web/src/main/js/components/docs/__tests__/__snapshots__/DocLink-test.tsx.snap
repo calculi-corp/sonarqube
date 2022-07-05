@@ -1,24 +1,6 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
-exports[`should not render sonarcloud link on sonarcloud 1`] = `
-<Fragment>
-  link text
-</Fragment>
-`;
-
-exports[`should not render sonarqube admin link on sonarcloud 1`] = `
-<Fragment>
-  link text
-</Fragment>
-`;
-
 exports[`should not render sonarqube admin link on sonarqube for non-admin 1`] = `
-<Fragment>
-  link text
-</Fragment>
-`;
-
-exports[`should not render sonarqube link on sonarcloud 1`] = `
 <Fragment>
   link text
 </Fragment>
@@ -35,8 +17,6 @@ exports[`should render documentation anchor 1`] = `
 
 exports[`should render documentation link 1`] = `
 <Link
-  onlyActiveOnIndex={false}
-  style={Object {}}
   to="/documentation/foo/bar"
 >
   link text
@@ -59,24 +39,6 @@ exports[`should render simple link 1`] = `
 </Fragment>
 `;
 
-exports[`should render sonarcloud link on sonarcloud 1`] = `
-<SonarCloudLink
-  url="/#sonarcloud#/foo/bar"
->
-  link text
-</SonarCloudLink>
-`;
-
-exports[`should render sonarcloud link on sonarcloud 2`] = `
-<Link
-  onlyActiveOnIndex={false}
-  style={Object {}}
-  to="/foo/bar"
->
-  link text
-</Link>
-`;
-
 exports[`should render sonarqube admin link on sonarqube for admin 1`] = `
 <SonarQubeAdminLink
   canAdmin={true}
@@ -88,8 +50,6 @@ exports[`should render sonarqube admin link on sonarqube for admin 1`] = `
 
 exports[`should render sonarqube admin link on sonarqube for admin 2`] = `
 <Link
-  onlyActiveOnIndex={false}
-  style={Object {}}
   target="_blank"
   to="/foo/bar"
 >
@@ -107,8 +67,6 @@ exports[`should render sonarqube link on sonarqube 1`] = `
 
 exports[`should render sonarqube link on sonarqube 2`] = `
 <Link
-  onlyActiveOnIndex={false}
-  style={Object {}}
   target="_blank"
   to="/foo/bar"
 >

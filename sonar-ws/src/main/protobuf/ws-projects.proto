@@ -73,3 +73,27 @@ message SearchWsResponse {
     optional string revision = 8;
   }
 }
+
+// WS api/projects/search_my_scannable_projects
+message SearchMyScannableProjectsResponse {
+  message Project {
+    optional string key = 1;
+    optional string name = 2;
+  }
+
+  repeated Project projects = 1;
+}
+
+// WS api/projects/license_usage
+message LicenseUsageResponse {
+  message Project {
+    optional string projectKey = 1;
+    optional string projectName = 2;
+    optional string branch = 3;
+    optional string pullRequest = 4;
+    optional int32 linesOfCode = 5;
+    optional double licenseUsagePercentage = 6;
+  }
+
+  repeated Project projects = 1;
+}

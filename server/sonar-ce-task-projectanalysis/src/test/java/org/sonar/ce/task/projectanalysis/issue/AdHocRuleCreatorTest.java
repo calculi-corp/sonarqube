@@ -27,9 +27,7 @@ import org.sonar.api.utils.System2;
 import org.sonar.core.util.SequenceUuidFactory;
 import org.sonar.db.DbSession;
 import org.sonar.db.DbTester;
-import org.sonar.db.rule.RuleDefinitionDto;
 import org.sonar.db.rule.RuleDto;
-import org.sonar.db.rule.RuleMetadataDto;
 import org.sonar.scanner.protocol.Constants;
 import org.sonar.scanner.protocol.output.ScannerReport;
 import org.sonar.server.es.EsTester;
@@ -61,13 +59,13 @@ public class AdHocRuleCreatorTest {
     assertThat(rule.getUuid()).isNotBlank();
     assertThat(rule.getKey()).isEqualTo(RuleKey.of("external_eslint", "no-cond-assign"));
     assertThat(rule.getName()).isEqualTo("eslint:no-cond-assign");
-    assertThat(rule.getDescription()).isNull();
+    assertThat(rule.getRuleDescriptionSectionDtos()).isEmpty();
     assertThat(rule.getSeverity()).isNull();
     assertThat(rule.getType()).isZero();
-    assertThat(rule.getMetadata().getAdHocName()).isNull();
-    assertThat(rule.getMetadata().getAdHocDescription()).isNull();
-    assertThat(rule.getMetadata().getAdHocSeverity()).isNull();
-    assertThat(rule.getMetadata().getAdHocType()).isNull();
+    assertThat(rule.getAdHocName()).isNull();
+    assertThat(rule.getAdHocDescription()).isNull();
+    assertThat(rule.getAdHocSeverity()).isNull();
+    assertThat(rule.getAdHocType()).isNull();
   }
 
   @Test
@@ -89,13 +87,13 @@ public class AdHocRuleCreatorTest {
     assertThat(rule.getUuid()).isNotBlank();
     assertThat(rule.getKey()).isEqualTo(RuleKey.of("external_eslint", "no-cond-assign"));
     assertThat(rule.getName()).isEqualTo("eslint:no-cond-assign");
-    assertThat(rule.getDescription()).isNull();
+    assertThat(rule.getRuleDescriptionSectionDtos()).isEmpty();
     assertThat(rule.getSeverity()).isNull();
     assertThat(rule.getType()).isZero();
-    assertThat(rule.getMetadata().getAdHocName()).isEqualTo("No condition assigned");
-    assertThat(rule.getMetadata().getAdHocDescription()).isEqualTo("A description");
-    assertThat(rule.getMetadata().getAdHocSeverity()).isEqualTo(Severity.BLOCKER);
-    assertThat(rule.getMetadata().getAdHocType()).isEqualTo(RuleType.BUG.getDbConstant());
+    assertThat(rule.getAdHocName()).isEqualTo("No condition assigned");
+    assertThat(rule.getAdHocDescription()).isEqualTo("A description");
+    assertThat(rule.getAdHocSeverity()).isEqualTo(Severity.BLOCKER);
+    assertThat(rule.getAdHocType()).isEqualTo(RuleType.BUG.getDbConstant());
   }
 
   @Test
@@ -111,8 +109,8 @@ public class AdHocRuleCreatorTest {
 
     RuleDto rule = underTest.persistAndIndex(dbSession, addHocRule);
 
-    assertThat(rule.getMetadata().getAdHocName()).isEqualTo(repeat("a", 200));
-    assertThat(rule.getMetadata().getAdHocDescription()).isEqualTo(repeat("a", 16_777_215));
+    assertThat(rule.getAdHocName()).isEqualTo(repeat("a", 200));
+    assertThat(rule.getAdHocDescription()).isEqualTo(repeat("a", 16_777_215));
   }
 
   @Test
@@ -144,30 +142,28 @@ public class AdHocRuleCreatorTest {
     assertThat(ruleUpdated.getUuid()).isNotBlank();
     assertThat(ruleUpdated.getKey()).isEqualTo(RuleKey.of("external_eslint", "no-cond-assign"));
     assertThat(ruleUpdated.getName()).isEqualTo("eslint:no-cond-assign");
-    assertThat(ruleUpdated.getDescription()).isNull();
+    assertThat(ruleUpdated.getRuleDescriptionSectionDtos()).isEmpty();
     assertThat(ruleUpdated.getSeverity()).isNull();
     assertThat(ruleUpdated.getType()).isZero();
-    assertThat(ruleUpdated.getMetadata().getAdHocName()).isEqualTo("No condition assigned updated");
-    assertThat(ruleUpdated.getMetadata().getAdHocDescription()).isEqualTo("A description updated");
-    assertThat(ruleUpdated.getMetadata().getAdHocSeverity()).isEqualTo(Severity.CRITICAL);
-    assertThat(ruleUpdated.getMetadata().getAdHocType()).isEqualTo(RuleType.CODE_SMELL.getDbConstant());
-    assertThat(ruleUpdated.getDefinition().getCreatedAt()).isEqualTo(creationDate);
-    assertThat(ruleUpdated.getMetadata().getCreatedAt()).isEqualTo(creationDate);
-    assertThat(ruleUpdated.getMetadata().getUpdatedAt()).isGreaterThan(creationDate);
+    assertThat(ruleUpdated.getAdHocName()).isEqualTo("No condition assigned updated");
+    assertThat(ruleUpdated.getAdHocDescription()).isEqualTo("A description updated");
+    assertThat(ruleUpdated.getAdHocSeverity()).isEqualTo(Severity.CRITICAL);
+    assertThat(ruleUpdated.getAdHocType()).isEqualTo(RuleType.CODE_SMELL.getDbConstant());
+    assertThat(ruleUpdated.getCreatedAt()).isEqualTo(creationDate);
+    assertThat(ruleUpdated.getUpdatedAt()).isGreaterThan(creationDate);
   }
 
   @Test
   public void does_not_update_rule_when_no_change() {
-    RuleDefinitionDto rule = db.rules().insert(r -> r.setRepositoryKey("external_eslint").setIsExternal(true).setIsAdHoc(true));
-    RuleMetadataDto ruleMetadata = db.rules().insertOrUpdateMetadata(rule);
+    RuleDto rule = db.rules().insert(r -> r.setRepositoryKey("external_eslint").setIsExternal(true).setIsAdHoc(true));
 
     RuleDto ruleUpdated = underTest.persistAndIndex(dbSession, new NewAdHocRule(ScannerReport.AdHocRule.newBuilder()
       .setEngineId("eslint")
       .setRuleId(rule.getKey().rule())
-      .setName(ruleMetadata.getAdHocName())
-      .setDescription(ruleMetadata.getAdHocDescription())
-      .setSeverity(Constants.Severity.valueOf(ruleMetadata.getAdHocSeverity()))
-      .setType(ScannerReport.IssueType.forNumber(ruleMetadata.getAdHocType()))
+      .setName(rule.getAdHocName())
+      .setDescription(rule.getAdHocDescription())
+      .setSeverity(Constants.Severity.valueOf(rule.getAdHocSeverity()))
+      .setType(ScannerReport.IssueType.forNumber(rule.getAdHocType()))
       .build()));
 
     assertThat(ruleUpdated).isNotNull();
@@ -175,18 +171,16 @@ public class AdHocRuleCreatorTest {
     assertThat(ruleUpdated.isAdHoc()).isTrue();
     assertThat(ruleUpdated.getKey()).isEqualTo(rule.getKey());
     assertThat(ruleUpdated.getName()).isEqualTo(rule.getName());
-    assertThat(ruleUpdated.getDescription()).isEqualTo(rule.getDescription());
+    assertThat(ruleUpdated.getRuleDescriptionSectionDtos()).usingRecursiveFieldByFieldElementComparator().isEqualTo(rule.getRuleDescriptionSectionDtos());
     assertThat(ruleUpdated.getSeverity()).isEqualTo(rule.getSeverity());
     assertThat(ruleUpdated.getType()).isEqualTo(rule.getType());
-    assertThat(ruleUpdated.getDefinition().getCreatedAt()).isEqualTo(rule.getCreatedAt());
-    assertThat(ruleUpdated.getDefinition().getUpdatedAt()).isEqualTo(rule.getUpdatedAt());
+    assertThat(ruleUpdated.getCreatedAt()).isEqualTo(rule.getCreatedAt());
+    assertThat(ruleUpdated.getUpdatedAt()).isEqualTo(rule.getUpdatedAt());
 
-    assertThat(ruleUpdated.getMetadata().getAdHocName()).isEqualTo(ruleMetadata.getAdHocName());
-    assertThat(ruleUpdated.getMetadata().getAdHocDescription()).isEqualTo(ruleMetadata.getAdHocDescription());
-    assertThat(ruleUpdated.getMetadata().getAdHocSeverity()).isEqualTo(ruleMetadata.getAdHocSeverity());
-    assertThat(ruleUpdated.getMetadata().getAdHocType()).isEqualTo(ruleMetadata.getAdHocType());
-    assertThat(ruleUpdated.getMetadata().getCreatedAt()).isEqualTo(rule.getCreatedAt());
-    assertThat(ruleUpdated.getMetadata().getUpdatedAt()).isEqualTo(rule.getUpdatedAt());
+    assertThat(ruleUpdated.getAdHocName()).isEqualTo(rule.getAdHocName());
+    assertThat(ruleUpdated.getAdHocDescription()).isEqualTo(rule.getAdHocDescription());
+    assertThat(ruleUpdated.getAdHocSeverity()).isEqualTo(rule.getAdHocSeverity());
+    assertThat(ruleUpdated.getAdHocType()).isEqualTo(rule.getAdHocType());
   }
 
 }

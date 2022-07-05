@@ -26,8 +26,9 @@ import {
   getGateForProject,
   searchProjects
 } from '../../api/quality-gates';
-import { addGlobalSuccessMessage } from '../../app/utils/globalMessagesService';
+import withComponentContext from '../../app/components/componentContext/withComponentContext';
 import handleRequiredAuthorization from '../../app/utils/handleRequiredAuthorization';
+import { addGlobalSuccessMessage } from '../../helpers/globalMessages';
 import { translate } from '../../helpers/l10n';
 import { Component, QualityGate } from '../../types/types';
 import { USE_SYSTEM_DEFAULT } from './constants';
@@ -46,7 +47,7 @@ interface State {
   submitting: boolean;
 }
 
-export default class ProjectQualityGateApp extends React.PureComponent<Props, State> {
+export class ProjectQualityGateApp extends React.PureComponent<Props, State> {
   mounted = false;
   state: State = {
     loading: true,
@@ -201,3 +202,5 @@ export default class ProjectQualityGateApp extends React.PureComponent<Props, St
     );
   }
 }
+
+export default withComponentContext(ProjectQualityGateApp);

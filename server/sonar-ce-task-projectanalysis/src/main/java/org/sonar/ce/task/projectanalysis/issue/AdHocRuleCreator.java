@@ -28,9 +28,7 @@ import org.sonar.core.util.UuidFactory;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.rule.RuleDao;
-import org.sonar.db.rule.RuleDefinitionDto;
 import org.sonar.db.rule.RuleDto;
-import org.sonar.db.rule.RuleMetadataDto;
 import org.sonar.server.rule.index.RuleIndexer;
 
 import static java.util.Objects.requireNonNull;
@@ -60,11 +58,45 @@ public class AdHocRuleCreator {
    */
   public RuleDto persistAndIndex(DbSession dbSession, NewAdHocRule adHoc) {
     RuleDao dao = dbClient.ruleDao();
-    Optional<RuleDto> existingRuleDtoOpt = dao.selectByKey(dbSession, adHoc.getKey());
-    RuleMetadataDto metadata;
     long now = system2.now();
-    if (!existingRuleDtoOpt.isPresent()) {
-      RuleDefinitionDto dto = new RuleDefinitionDto()
+
+    RuleDto ruleDtoToUpdate = findOrCreateRuleDto(dbSession, adHoc, dao, now);
+
+    if (adHoc.hasDetails()) {
+      boolean changed = false;
+      if (!Objects.equals(ruleDtoToUpdate.getAdHocName(), adHoc.getName())) {
+        ruleDtoToUpdate.setAdHocName(substring(adHoc.getName(), 0, MAX_LENGTH_AD_HOC_NAME));
+        changed = true;
+      }
+      if (!Objects.equals(ruleDtoToUpdate.getAdHocDescription(), adHoc.getDescription())) {
+        ruleDtoToUpdate.setAdHocDescription(substring(adHoc.getDescription(), 0, MAX_LENGTH_AD_HOC_DESC));
+        changed = true;
+      }
+      if (!Objects.equals(ruleDtoToUpdate.getAdHocSeverity(), adHoc.getSeverity())) {
+        ruleDtoToUpdate.setAdHocSeverity(adHoc.getSeverity());
+        changed = true;
+      }
+      RuleType ruleType = requireNonNull(adHoc.getRuleType(), "Rule type should not be null");
+      if (!Objects.equals(ruleDtoToUpdate.getAdHocType(), ruleType.getDbConstant())) {
+        ruleDtoToUpdate.setAdHocType(ruleType);
+        changed = true;
+      }
+      if (changed) {
+        ruleDtoToUpdate.setUpdatedAt(now);
+        dao.update(dbSession, ruleDtoToUpdate);
+      }
+
+    }
+
+    RuleDto ruleDto = dao.selectOrFailByKey(dbSession, adHoc.getKey());
+    ruleIndexer.commitAndIndex(dbSession, ruleDto.getUuid());
+    return ruleDto;
+  }
+
+  private RuleDto findOrCreateRuleDto(DbSession dbSession, NewAdHocRule adHoc, RuleDao dao, long now) {
+    Optional<RuleDto> existingRuleDtoOpt = dbClient.ruleDao().selectByKey(dbSession, adHoc.getKey());
+    if (existingRuleDtoOpt.isEmpty()) {
+      RuleDto ruleDto = new RuleDto()
         .setUuid(uuidFactory.create())
         .setRuleKey(adHoc.getKey())
         .setIsExternal(true)
@@ -74,45 +106,13 @@ public class AdHocRuleCreator {
         .setStatus(READY)
         .setCreatedAt(now)
         .setUpdatedAt(now);
-      dao.insert(dbSession, dto);
-      metadata = new RuleMetadataDto().setRuleUuid(dto.getUuid());
+      dao.insert(dbSession, ruleDto);
+      return ruleDto;
     } else {
-      // No need to update the rule, only org specific metadata
       RuleDto ruleDto = existingRuleDtoOpt.get();
       Preconditions.checkState(ruleDto.isExternal() && ruleDto.isAdHoc());
-      metadata = ruleDto.getMetadata();
+      return ruleDto;
     }
-
-    if (adHoc.hasDetails()) {
-      boolean changed = false;
-      if (!Objects.equals(metadata.getAdHocName(), adHoc.getName())) {
-        metadata.setAdHocName(substring(adHoc.getName(), 0, MAX_LENGTH_AD_HOC_NAME));
-        changed = true;
-      }
-      if (!Objects.equals(metadata.getAdHocDescription(), adHoc.getDescription())) {
-        metadata.setAdHocDescription(substring(adHoc.getDescription(), 0, MAX_LENGTH_AD_HOC_DESC));
-        changed = true;
-      }
-      if (!Objects.equals(metadata.getAdHocSeverity(), adHoc.getSeverity())) {
-        metadata.setAdHocSeverity(adHoc.getSeverity());
-        changed = true;
-      }
-      RuleType ruleType = requireNonNull(adHoc.getRuleType(), "Rule type should not be null");
-      if (!Objects.equals(metadata.getAdHocType(), ruleType.getDbConstant())) {
-        metadata.setAdHocType(ruleType);
-        changed = true;
-      }
-      if (changed) {
-        metadata.setUpdatedAt(now);
-        metadata.setCreatedAt(now);
-        dao.insertOrUpdate(dbSession, metadata);
-      }
-
-    }
-
-    RuleDto ruleDto = dao.selectOrFailByKey(dbSession, adHoc.getKey());
-    ruleIndexer.commitAndIndex(dbSession, ruleDto.getUuid());
-    return ruleDto;
   }
 
 }

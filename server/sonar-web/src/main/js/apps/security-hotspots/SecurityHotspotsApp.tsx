@@ -17,18 +17,17 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-import { Location } from 'history';
-import key from 'keymaster';
 import { flatMap, range } from 'lodash';
 import * as React from 'react';
 import { getMeasures } from '../../api/measures';
 import { getSecurityHotspotList, getSecurityHotspots } from '../../api/security-hotspots';
 import withBranchStatusActions from '../../app/components/branch-status/withBranchStatusActions';
+import withComponentContext from '../../app/components/componentContext/withComponentContext';
 import withCurrentUserContext from '../../app/components/current-user/withCurrentUserContext';
-import { Router } from '../../components/hoc/withRouter';
+import { Location, Router, withRouter } from '../../components/hoc/withRouter';
 import { getLeakValue } from '../../components/measure/utils';
 import { getBranchLikeQuery, isPullRequest, isSameBranchLike } from '../../helpers/branch-like';
-import { KeyboardCodes, KeyboardKeys } from '../../helpers/keycodes';
+import { KeyboardKeys } from '../../helpers/keycodes';
 import { scrollToElement } from '../../helpers/scrolling';
 import { getStandards } from '../../helpers/security-standard';
 import { BranchLike } from '../../types/branch-like';
@@ -46,7 +45,6 @@ import SecurityHotspotsAppRenderer from './SecurityHotspotsAppRenderer';
 import './styles.css';
 import { getLocations, SECURITY_STANDARDS } from './utils';
 
-const HOTSPOT_KEYMASTER_SCOPE = 'hotspots-list';
 const PAGE_SIZE = 500;
 interface DispatchProps {
   fetchBranchStatus: (branchLike: BranchLike, projectKey: string) => void;
@@ -143,27 +141,34 @@ export class SecurityHotspotsApp extends React.PureComponent<Props, State> {
   }
 
   registerKeyboardEvents() {
-    key.setScope(HOTSPOT_KEYMASTER_SCOPE);
-    key('up', HOTSPOT_KEYMASTER_SCOPE, () => {
-      this.selectNeighboringHotspot(-1);
-      return false;
-    });
-    key('down', HOTSPOT_KEYMASTER_SCOPE, () => {
-      this.selectNeighboringHotspot(+1);
-      return false;
-    });
-    window.addEventListener('keydown', this.handleKeyDown);
+    document.addEventListener('keydown', this.handleKeyDown);
   }
 
   handleKeyDown = (event: KeyboardEvent) => {
     if (event.key === KeyboardKeys.Alt) {
       event.preventDefault();
-    } else if (event.code === KeyboardCodes.DownArrow && event.altKey) {
-      event.preventDefault();
-      this.selectNextLocation();
-    } else if (event.code === KeyboardCodes.UpArrow && event.altKey) {
-      event.preventDefault();
-      this.selectPreviousLocation();
+      return;
+    }
+
+    switch (event.key) {
+      case KeyboardKeys.DownArrow: {
+        event.preventDefault();
+        if (event.altKey) {
+          this.selectNextLocation();
+        } else {
+          this.selectNeighboringHotspot(+1);
+        }
+        break;
+      }
+      case KeyboardKeys.UpArrow: {
+        event.preventDefault();
+        if (event.altKey) {
+          this.selectPreviousLocation();
+        } else {
+          this.selectNeighboringHotspot(-1);
+        }
+        break;
+      }
     }
   };
 
@@ -218,8 +223,7 @@ export class SecurityHotspotsApp extends React.PureComponent<Props, State> {
   };
 
   unregisterKeyboardEvents() {
-    key.deleteScope(HOTSPOT_KEYMASTER_SCOPE);
-    window.removeEventListener('keydown', this.handleKeyDown);
+    document.removeEventListener('keydown', this.handleKeyDown);
   }
 
   constructFiltersFromProps(
@@ -341,7 +345,7 @@ export class SecurityHotspotsApp extends React.PureComponent<Props, State> {
         p: page,
         ps: PAGE_SIZE,
         status: HotspotStatus.TO_REVIEW, // we're only interested in unresolved hotspots
-        sinceLeakPeriod: filters.sinceLeakPeriod && Boolean(filterByFile), // only add leak period when filtering by file
+        inNewCodePeriod: filters.sinceLeakPeriod && Boolean(filterByFile), // only add leak period when filtering by file
         ...getBranchLikeQuery(branchLike)
       });
     }
@@ -363,7 +367,7 @@ export class SecurityHotspotsApp extends React.PureComponent<Props, State> {
       status,
       resolution,
       onlyMine: filters.assignedToMe,
-      sinceLeakPeriod: filters.sinceLeakPeriod,
+      inNewCodePeriod: filters.sinceLeakPeriod,
       ...getBranchLikeQuery(branchLike)
     });
   }
@@ -546,4 +550,6 @@ export class SecurityHotspotsApp extends React.PureComponent<Props, State> {
   }
 }
 
-export default withCurrentUserContext(withBranchStatusActions(SecurityHotspotsApp));
+export default withRouter(
+  withComponentContext(withCurrentUserContext(withBranchStatusActions(SecurityHotspotsApp)))
+);

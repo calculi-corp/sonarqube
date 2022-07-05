@@ -20,8 +20,9 @@
 import { mount, shallow } from 'enzyme';
 import { range } from 'lodash';
 import * as React from 'react';
+import { mockSourceLine, mockSourceViewerFile } from '../../../../helpers/mocks/sources';
 import { scrollHorizontally } from '../../../../helpers/scrolling';
-import { mockIssue, mockSourceLine, mockSourceViewerFile } from '../../../../helpers/testMocks';
+import { mockIssue } from '../../../../helpers/testMocks';
 import SnippetViewer from '../SnippetViewer';
 
 jest.mock('../../../../helpers/scrolling', () => ({
@@ -61,7 +62,6 @@ it('should render additional child in line', () => {
   wrapper.instance().renderLine({
     displayDuplications: false,
     index: 1,
-    issuesForLine: [],
     issueLocations: [],
     line: sourceline,
     snippet: [sourceline],
@@ -82,7 +82,7 @@ it('should render correctly when at the top of the file', () => {
 });
 
 it('should render correctly when at the bottom of the file', () => {
-  const component = mockSourceViewerFile({ measures: { lines: '14' } });
+  const component = mockSourceViewerFile('foo/bar.ts', 'my-project', { measures: { lines: '14' } });
   const snippet = range(10, 14).map(line => mockSourceLine({ line }));
   const wrapper = shallowRender({
     component,
@@ -145,20 +145,16 @@ function shallowRender(props: Partial<SnippetViewer['props']> = {}) {
       duplications={undefined}
       duplicationsByLine={undefined}
       expandBlock={jest.fn()}
-      handleCloseIssues={jest.fn()}
-      handleOpenIssues={jest.fn()}
       handleSymbolClick={jest.fn()}
       highlightedLocationMessage={{ index: 0, text: '' }}
       highlightedSymbols={[]}
       index={0}
       issue={mockIssue()}
-      issuesByLine={{}}
       lastSnippetOfLastGroup={false}
       loadDuplications={jest.fn()}
       locations={[]}
       locationsByLine={{}}
       onLocationSelect={jest.fn()}
-      openIssuesByLine={{}}
       renderDuplicationPopup={jest.fn()}
       scroll={jest.fn()}
       snippet={[]}
@@ -174,20 +170,16 @@ function mountRender(props: Partial<SnippetViewer['props']> = {}) {
       duplications={undefined}
       duplicationsByLine={undefined}
       expandBlock={jest.fn()}
-      handleCloseIssues={jest.fn()}
-      handleOpenIssues={jest.fn()}
       handleSymbolClick={jest.fn()}
       highlightedLocationMessage={{ index: 0, text: '' }}
       highlightedSymbols={[]}
       index={0}
       issue={mockIssue()}
-      issuesByLine={{}}
       lastSnippetOfLastGroup={false}
       loadDuplications={jest.fn()}
       locations={[]}
       locationsByLine={{}}
       onLocationSelect={jest.fn()}
-      openIssuesByLine={{}}
       renderDuplicationPopup={jest.fn()}
       scroll={jest.fn()}
       snippet={[mockSourceLine()]}

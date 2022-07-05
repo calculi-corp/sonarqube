@@ -39,7 +39,7 @@ import org.sonar.api.utils.Duration;
 import org.sonar.core.issue.DefaultIssue;
 import org.sonar.db.component.ComponentDto;
 import org.sonar.db.protobuf.DbIssues;
-import org.sonar.db.rule.RuleDefinitionDto;
+import org.sonar.db.rule.RuleDto;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static org.sonar.api.utils.DateUtils.dateToLong;
@@ -92,7 +92,6 @@ public final class IssueDto implements Serializable {
   private boolean isExternal;
   private String language;
   private String componentKey;
-  private String moduleUuid;
   private String moduleUuidPath;
   private String projectKey;
   private String filePath;
@@ -128,7 +127,6 @@ public final class IssueDto implements Serializable {
       .setTags(issue.tags())
       .setComponentUuid(issue.componentUuid())
       .setComponentKey(issue.componentKey())
-      .setModuleUuid(issue.moduleUuid())
       .setModuleUuidPath(issue.moduleUuidPath())
       .setProjectUuid(issue.projectUuid())
       .setProjectKey(issue.projectKey())
@@ -177,7 +175,6 @@ public final class IssueDto implements Serializable {
       .setTags(issue.tags())
       .setComponentUuid(issue.componentUuid())
       .setComponentKey(issue.componentKey())
-      .setModuleUuid(issue.moduleUuid())
       .setModuleUuidPath(issue.moduleUuidPath())
       .setProjectUuid(issue.projectUuid())
       .setProjectKey(issue.projectKey())
@@ -208,7 +205,6 @@ public final class IssueDto implements Serializable {
   public IssueDto setComponent(ComponentDto component) {
     this.componentKey = component.getDbKey();
     this.componentUuid = component.uuid();
-    this.moduleUuid = component.moduleUuid();
     this.moduleUuidPath = component.moduleUuidPath();
     this.filePath = component.path();
     return this;
@@ -366,7 +362,7 @@ public final class IssueDto implements Serializable {
   }
 
   public Set<String> getSecurityStandards() {
-    return RuleDefinitionDto.deserializeSecurityStandardsString(securityStandards);
+    return RuleDto.deserializeSecurityStandardsString(securityStandards);
   }
 
   /**
@@ -451,7 +447,7 @@ public final class IssueDto implements Serializable {
     return ruleKey;
   }
 
-  public IssueDto setRule(RuleDefinitionDto rule) {
+  public IssueDto setRule(RuleDto rule) {
     Preconditions.checkNotNull(rule.getUuid(), "Rule must be persisted.");
     this.ruleUuid = rule.getUuid();
     this.ruleKey = rule.getRuleKey();
@@ -476,7 +472,7 @@ public final class IssueDto implements Serializable {
   /**
    * Should only be used to persist in E/S
    * <p/>
-   * Please use {@link #setRule(RuleDefinitionDto)} instead
+   * Please use {@link #setRule(RuleDto)} instead
    */
   public IssueDto setLanguage(String language) {
     this.language = language;
@@ -522,21 +518,6 @@ public final class IssueDto implements Serializable {
   public IssueDto setComponentUuid(@Nullable String s) {
     checkArgument(s == null || s.length() <= 50, "Value is too long for column ISSUES.COMPONENT_UUID: %s", s);
     this.componentUuid = s;
-    return this;
-  }
-
-  @CheckForNull
-  public String getModuleUuid() {
-    return moduleUuid;
-  }
-
-  /**
-   * Should only be used to persist in E/S
-   * <p/>
-   * Please use {@link #setComponent(ComponentDto)} instead
-   */
-  public IssueDto setModuleUuid(@Nullable String moduleUuid) {
-    this.moduleUuid = moduleUuid;
     return this;
   }
 
@@ -600,7 +581,7 @@ public final class IssueDto implements Serializable {
   /**
    * Should only be used to persist in E/S
    * <p/>
-   * Please use {@link #setRule(RuleDefinitionDto)} instead
+   * Please use {@link #setRule(RuleDto)} instead
    */
   public IssueDto setRuleKey(String repo, String rule) {
     this.ruleRepo = repo;
@@ -737,7 +718,6 @@ public final class IssueDto implements Serializable {
     issue.setAssigneeUuid(assigneeUuid);
     issue.setComponentKey(componentKey);
     issue.setComponentUuid(componentUuid);
-    issue.setModuleUuid(moduleUuid);
     issue.setModuleUuidPath(moduleUuidPath);
     issue.setProjectUuid(projectUuid);
     issue.setProjectKey(projectKey);

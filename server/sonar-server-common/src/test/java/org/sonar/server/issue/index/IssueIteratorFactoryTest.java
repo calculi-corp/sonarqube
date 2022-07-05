@@ -31,7 +31,7 @@ import org.sonar.api.utils.System2;
 import org.sonar.db.DbTester;
 import org.sonar.db.component.ComponentDto;
 import org.sonar.db.issue.IssueDto;
-import org.sonar.db.rule.RuleDefinitionDto;
+import org.sonar.db.rule.RuleDto;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.sonar.db.component.ComponentTesting.newDirectory;
@@ -46,7 +46,7 @@ public class IssueIteratorFactoryTest {
 
   @Test
   public void iterator_over_one_issue() {
-    RuleDefinitionDto rule = dbTester.rules().insert();
+    RuleDto rule = dbTester.rules().insert();
     ComponentDto project = dbTester.components().insertPrivateProject();
     ComponentDto file = dbTester.components().insertComponent(newFileDto(project)
       .setPath("src/main/java/Action.java"));
@@ -86,7 +86,6 @@ public class IssueIteratorFactoryTest {
     assertThat(issue.ruleUuid()).isEqualTo(rule.getUuid());
     assertThat(issue.componentUuid()).isEqualTo(file.uuid());
     assertThat(issue.projectUuid()).isEqualTo(file.projectUuid());
-    assertThat(issue.moduleUuid()).isEqualTo(file.projectUuid());
     assertThat(issue.modulePath()).isEqualTo(file.moduleUuidPath());
     assertThat(issue.directoryPath()).isEqualTo("src/main/java");
     assertThat(issue.filePath()).isEqualTo("src/main/java/Action.java");
@@ -97,7 +96,7 @@ public class IssueIteratorFactoryTest {
 
   @Test
   public void iterator_over_issues() {
-    RuleDefinitionDto rule = dbTester.rules().insert();
+    RuleDto rule = dbTester.rules().insert();
     ComponentDto project = dbTester.components().insertPrivateProject();
     ComponentDto module = dbTester.components().insertComponent(newModuleDto(project));
     ComponentDto directory = dbTester.components().insertComponent(newDirectory(module, "src/main/java"));
@@ -129,7 +128,7 @@ public class IssueIteratorFactoryTest {
 
   @Test
   public void iterator_over_issue_from_project() {
-    RuleDefinitionDto rule = dbTester.rules().insert();
+    RuleDto rule = dbTester.rules().insert();
     ComponentDto project1 = dbTester.components().insertPrivateProject();
     ComponentDto module1 = dbTester.components().insertComponent(newModuleDto(project1));
     ComponentDto file1 = dbTester.components().insertComponent(newFileDto(module1));
@@ -153,7 +152,7 @@ public class IssueIteratorFactoryTest {
 
   @Test
   public void extract_directory_path() {
-    RuleDefinitionDto rule = dbTester.rules().insert();
+    RuleDto rule = dbTester.rules().insert();
     ComponentDto project = dbTester.components().insertPrivateProject();
     ComponentDto module = dbTester.components().insertComponent(newModuleDto(project));
     ComponentDto fileInRootDir = dbTester.components().insertComponent(newFileDto(module).setPath("pom.xml"));
@@ -174,7 +173,7 @@ public class IssueIteratorFactoryTest {
 
   @Test
   public void extract_file_path() {
-    RuleDefinitionDto rule = dbTester.rules().insert();
+    RuleDto rule = dbTester.rules().insert();
     ComponentDto project = dbTester.components().insertPrivateProject();
     ComponentDto module = dbTester.components().insertComponent(newModuleDto(project));
     ComponentDto fileInRootDir = dbTester.components().insertComponent(newFileDto(module).setPath("pom.xml"));

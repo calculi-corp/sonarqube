@@ -19,6 +19,7 @@
  */
 package org.sonar.server.component;
 
+import java.util.List;
 import org.junit.Rule;
 import org.junit.Test;
 import org.sonar.api.resources.ResourceType;
@@ -33,7 +34,7 @@ import org.sonar.db.component.ComponentTesting;
 import org.sonar.db.component.SnapshotDto;
 import org.sonar.db.issue.IssueDto;
 import org.sonar.db.project.ProjectDto;
-import org.sonar.db.rule.RuleDefinitionDto;
+import org.sonar.db.rule.RuleDto;
 import org.sonar.db.webhook.WebhookDto;
 import org.sonar.server.es.TestProjectIndexers;
 
@@ -82,6 +83,38 @@ public class ComponentCleanerServiceTest {
     assertNotExists(data1);
     assertNotExists(data2);
     assertExists(data3);
+  }
+
+  @Test
+  public void delete_list_of_components_from_db() {
+    ComponentDto componentDto1 = db.components().insertPublicProject();
+    ComponentDto componentDto2 = db.components().insertPublicProject();
+    ComponentDto componentDto3 = db.components().insertPublicProject();
+
+    mockResourceTypeAsValidProject();
+
+    underTest.deleteComponents(dbSession, asList(componentDto1, componentDto2));
+    dbSession.commit();
+
+    assertNotExists(componentDto1);
+    assertNotExists(componentDto2);
+    assertExists(componentDto3);
+  }
+
+  @Test
+  public void fail_with_IAE_if_project_non_deletable() {
+    ComponentDto componentDto1 = db.components().insertPublicProject();
+    ComponentDto componentDto2 = db.components().insertPublicProject();
+
+    mockResourceTypeAsNonDeletable();
+
+    dbSession.commit();
+
+    List<ComponentDto> componentDtos = asList(componentDto1, componentDto2);
+
+    assertThatThrownBy(() -> underTest.deleteComponents(dbSession, componentDtos))
+      .withFailMessage("Only projects can be deleted")
+      .isInstanceOf(IllegalArgumentException.class);
   }
 
   @Test
@@ -163,7 +196,7 @@ public class ComponentCleanerServiceTest {
     ProjectDto project = dbClient.projectDao().selectByUuid(dbSession, componentDto.uuid()).get();
     BranchDto branch = dbClient.branchDao().selectByUuid(dbSession, project.getUuid()).get();
 
-    RuleDefinitionDto rule = db.rules().insert();
+    RuleDto rule = db.rules().insert();
     IssueDto issue = db.issues().insert(rule, project, componentDto);
     SnapshotDto analysis = db.components().insertSnapshot(componentDto);
     mockResourceTypeAsValidProject();
@@ -173,6 +206,12 @@ public class ComponentCleanerServiceTest {
   private void mockResourceTypeAsValidProject() {
     ResourceType resourceType = mock(ResourceType.class);
     when(resourceType.getBooleanProperty(anyString())).thenReturn(true);
+    when(mockResourceTypes.get(anyString())).thenReturn(resourceType);
+  }
+
+  private void mockResourceTypeAsNonDeletable() {
+    ResourceType resourceType = mock(ResourceType.class);
+    when(resourceType.getBooleanProperty("deletable")).thenReturn(false);
     when(mockResourceTypes.get(anyString())).thenReturn(resourceType);
   }
 
@@ -198,6 +237,18 @@ public class ComponentCleanerServiceTest {
     assertThat(dbClient.branchDao().selectByUuid(dbSession, appOrProject.getUuid()).isPresent()).isEqualTo(exists);
   }
 
+  private void assertNotExists(ComponentDto componentDto) {
+    assertComponentExists(componentDto, false);
+  }
+
+  private void assertExists(ComponentDto componentDto) {
+    assertComponentExists(componentDto, true);
+  }
+
+  private void assertComponentExists(ComponentDto componentDto, boolean exists) {
+    assertThat(dbClient.componentDao().selectByUuid(dbSession, componentDto.uuid()).isPresent()).isEqualTo(exists);
+  }
+  
   private static class DbData {
     final ProjectDto project;
     final BranchDto branch;

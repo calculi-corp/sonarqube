@@ -39,6 +39,8 @@ public interface IssueMapper {
 
   Set<String> selectIssueKeysByComponentUuid(@Param("componentUuid") String componentUuid);
 
+  Set<String> selectIssueKeysByComponentUuidAndChangedSinceDate(@Param("componentUuid") String componentUuid, @Param("changedSince") long changedSince);
+
   List<IssueDto> selectByComponentUuidPaginated(@Param("componentUuid") String componentUuid,
                                                 @Param("pagination") Pagination pagination);
 
@@ -64,8 +66,13 @@ public interface IssueMapper {
 
   List<IssueDto> selectNonClosedByModuleOrProject(@Param("projectUuid") String projectUuid, @Param("likeModuleUuidPath") String likeModuleUuidPath);
 
-  Collection<IssueGroupDto> selectIssueGroupsByBaseComponent(
-    @Param("baseComponent") ComponentDto baseComponent,
-    @Param("leakPeriodBeginningDate") long leakPeriodBeginningDate);
+  Collection<HotspotGroupDto> selectBranchHotspotsCount(@Param("rootUuid") String rootUuid, @Param("leakPeriodBeginningDate") long leakPeriodBeginningDate);
 
+  Collection<IssueGroupDto> selectIssueGroupsByComponent(@Param("component") ComponentDto component, @Param("leakPeriodBeginningDate") long leakPeriodBeginningDate);
+
+
+  List<IssueDto> selectByBranch(@Param("queryParams") IssueQueryParams issueQueryParams,
+    @Param("pagination") Pagination pagination);
+
+  List<String> selectRecentlyClosedIssues(@Param("queryParams") IssueQueryParams issueQueryParams);
 }

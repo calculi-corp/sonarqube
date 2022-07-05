@@ -31,7 +31,7 @@ import { mockComponent } from '../../../helpers/mocks/component';
 import { mockQualityGate } from '../../../helpers/mocks/quality-gates';
 import { waitAndUpdate } from '../../../helpers/testUtils';
 import { USE_SYSTEM_DEFAULT } from '../constants';
-import ProjectQualityGateApp from '../ProjectQualityGateApp';
+import { ProjectQualityGateApp } from '../ProjectQualityGateApp';
 
 jest.mock('../../../api/quality-gates', () => {
   const { mockQualityGate } = jest.requireActual('../../../helpers/mocks/quality-gates');
@@ -62,7 +62,7 @@ jest.mock('../../../api/quality-gates', () => {
   };
 });
 
-jest.mock('../../../app/utils/globalMessagesService', () => ({
+jest.mock('../../../helpers/globalMessages', () => ({
   addGlobalSuccessMessage: jest.fn()
 }));
 

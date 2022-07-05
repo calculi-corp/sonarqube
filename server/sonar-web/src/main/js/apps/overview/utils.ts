@@ -17,12 +17,15 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import { memoize } from 'lodash';
 import CoverageRating from '../../components/ui/CoverageRating';
 import DuplicationsRating from '../../components/ui/DuplicationsRating';
 import { ISSUETYPE_METRIC_KEYS_MAP } from '../../helpers/issues';
 import { translate } from '../../helpers/l10n';
+import { parseAsString } from '../../helpers/query';
 import { IssueType } from '../../types/issues';
 import { MetricKey } from '../../types/metrics';
+import { RawQuery } from '../../types/types';
 
 export const METRICS: string[] = [
   // quality gate
@@ -178,3 +181,9 @@ export function getMeasurementLabelKeys(type: MeasurementType, useDiffMetric: bo
     labelKey: MEASUREMENTS_MAP[type].labelKey
   };
 }
+
+export const parseQuery = memoize((urlQuery: RawQuery): { codeScope: string } => {
+  return {
+    codeScope: parseAsString(urlQuery['code_scope'])
+  };
+});

@@ -34,7 +34,7 @@ import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.DbTester;
 import org.sonar.db.rule.RuleDao;
-import org.sonar.db.rule.RuleDefinitionDto;
+import org.sonar.db.rule.RuleDto;
 import org.sonar.db.rule.RuleParamDto;
 import org.sonar.db.rule.RuleTesting;
 
@@ -53,14 +53,15 @@ public class CachingRuleFinderTest {
 
   private final DbClient dbClient = dbTester.getDbClient();
   private final AlwaysIncreasingSystem2 system2 = new AlwaysIncreasingSystem2();
-  private RuleDefinitionDto[] ruleDefinitions;
+  private RuleDto[] ruleDtos;
   private RuleParamDto[] ruleParams;
   private CachingRuleFinder underTest;
+  private RuleDescriptionFormatter ruleDescriptionFormatter = new RuleDescriptionFormatter();
 
   @Before()
   public void setUp() {
-    Consumer<RuleDefinitionDto> setUpdatedAt = rule -> rule.setUpdatedAt(system2.now());
-    this.ruleDefinitions = new RuleDefinitionDto[] {
+    Consumer<RuleDto> setUpdatedAt = rule -> rule.setUpdatedAt(system2.now());
+    this.ruleDtos = new RuleDto[] {
       dbTester.rules().insert(setUpdatedAt),
       dbTester.rules().insert(setUpdatedAt),
       dbTester.rules().insert(setUpdatedAt),
@@ -68,11 +69,11 @@ public class CachingRuleFinderTest {
       dbTester.rules().insert(setUpdatedAt),
       dbTester.rules().insert(setUpdatedAt)
     };
-    this.ruleParams = Arrays.stream(ruleDefinitions)
+    this.ruleParams = Arrays.stream(ruleDtos)
       .map(rule -> dbTester.rules().insertRuleParam(rule))
       .toArray(RuleParamDto[]::new);
 
-    underTest = new CachingRuleFinder(dbClient);
+    underTest = new CachingRuleFinder(dbClient, ruleDescriptionFormatter);
 
     // delete all data from DB to ensure tests rely on cache exclusively
     dbTester.executeUpdateSql("delete from rules");
@@ -89,10 +90,10 @@ public class CachingRuleFinderTest {
     when(dbClient.openSession(anyBoolean())).thenReturn(dbSession);
     when(dbClient.ruleDao()).thenReturn(ruleDao);
 
-    new CachingRuleFinder(dbClient);
+    new CachingRuleFinder(dbClient, ruleDescriptionFormatter);
 
     verify(dbClient).openSession(anyBoolean());
-    verify(ruleDao).selectAllDefinitions(dbSession);
+    verify(ruleDao).selectAll(dbSession);
     verify(ruleDao).selectAllRuleParams(dbSession);
     verifyNoMoreInteractions(ruleDao);
   }
@@ -105,22 +106,22 @@ public class CachingRuleFinderTest {
     when(dbClient.openSession(anyBoolean())).thenReturn(dbSession);
     when(dbClient.ruleDao()).thenReturn(ruleDao);
     List<RuleKey> ruleKeys = Arrays.asList(RuleKey.of("A", "B"), RuleKey.of("C", "D"), RuleKey.of("E", "F"));
-    when(ruleDao.selectAllDefinitions(dbSession)).thenReturn(ruleKeys.stream().map(RuleTesting::newRule).collect(toList()));
+    when(ruleDao.selectAll(dbSession)).thenReturn(ruleKeys.stream().map(RuleTesting::newRule).collect(toList()));
 
-    new CachingRuleFinder(dbClient);
+    new CachingRuleFinder(dbClient, ruleDescriptionFormatter);
 
     verify(ruleDao).selectAllRuleParams(dbSession);
   }
 
   @Test
   public void findByKey_returns_all_loaded_rules() {
-    for (int i = 0; i < ruleDefinitions.length; i++) {
-      RuleDefinitionDto ruleDefinition = ruleDefinitions[i];
+    for (int i = 0; i < ruleDtos.length; i++) {
+      RuleDto ruleDto = ruleDtos[i];
       RuleParamDto ruleParam = ruleParams[i];
 
-      org.sonar.api.rules.Rule rule = underTest.findByKey(ruleDefinition.getKey());
-      verifyRule(rule, ruleDefinition, ruleParam);
-      assertThat(underTest.findByKey(ruleDefinition.getRepositoryKey(), ruleDefinition.getRuleKey()))
+      org.sonar.api.rules.Rule rule = underTest.findByKey(ruleDto.getKey());
+      verifyRule(rule, ruleDto, ruleParam);
+      assertThat(underTest.findByKey(ruleDto.getRepositoryKey(), ruleDto.getRuleKey()))
         .isSameAs(rule);
     }
   }
@@ -154,19 +155,19 @@ public class CachingRuleFinderTest {
   public void find_returns_most_recent_rule_when_RuleQuery_has_no_non_null_field() {
     Rule rule = underTest.find(RuleQuery.create());
 
-    assertThat(toRuleKey(rule)).isEqualTo(ruleDefinitions[5].getKey());
+    assertThat(toRuleKey(rule)).isEqualTo(ruleDtos[5].getKey());
   }
 
   @Test
   public void find_searches_by_exact_match_of_repository_key_and_returns_most_recent_rule() {
     String repoKey = "ABCD";
-    RuleDefinitionDto[] sameRepoKey = {
+    RuleDto[] sameRepoKey = {
       dbTester.rules().insert(rule -> rule.setRepositoryKey(repoKey).setUpdatedAt(system2.now())),
       dbTester.rules().insert(rule -> rule.setRepositoryKey(repoKey).setUpdatedAt(system2.now()))
     };
-    RuleDefinitionDto otherRule = dbTester.rules().insert(rule -> rule.setUpdatedAt(system2.now()));
+    RuleDto otherRule = dbTester.rules().insert(rule -> rule.setUpdatedAt(system2.now()));
 
-    CachingRuleFinder underTest = new CachingRuleFinder(dbClient);
+    CachingRuleFinder underTest = new CachingRuleFinder(dbClient, ruleDescriptionFormatter);
 
     assertThat(toRuleKey(underTest.find(RuleQuery.create().withRepositoryKey(repoKey))))
       .isEqualTo(sameRepoKey[1].getKey());
@@ -181,13 +182,13 @@ public class CachingRuleFinderTest {
   @Test
   public void find_searches_by_exact_match_of_ruleKey_and_returns_most_recent_rule() {
     String ruleKey = "ABCD";
-    RuleDefinitionDto[] sameRuleKey = {
+    RuleDto[] sameRuleKey = {
       dbTester.rules().insert(rule -> rule.setRuleKey(ruleKey).setUpdatedAt(system2.now())),
       dbTester.rules().insert(rule -> rule.setRuleKey(ruleKey).setUpdatedAt(system2.now()))
     };
-    RuleDefinitionDto otherRule = dbTester.rules().insert(rule -> rule.setUpdatedAt(system2.now()));
+    RuleDto otherRule = dbTester.rules().insert(rule -> rule.setUpdatedAt(system2.now()));
 
-    CachingRuleFinder underTest = new CachingRuleFinder(dbClient);
+    CachingRuleFinder underTest = new CachingRuleFinder(dbClient, ruleDescriptionFormatter);
 
     assertThat(toRuleKey(underTest.find(RuleQuery.create().withKey(ruleKey))))
       .isEqualTo(sameRuleKey[1].getKey());
@@ -202,13 +203,13 @@ public class CachingRuleFinderTest {
   @Test
   public void find_searches_by_exact_match_of_configKey_and_returns_most_recent_rule() {
     String configKey = "ABCD";
-    RuleDefinitionDto[] sameConfigKey = {
+    RuleDto[] sameConfigKey = {
       dbTester.rules().insert(rule -> rule.setConfigKey(configKey).setUpdatedAt(system2.now())),
       dbTester.rules().insert(rule -> rule.setConfigKey(configKey).setUpdatedAt(system2.now()))
     };
-    RuleDefinitionDto otherRule = dbTester.rules().insert(rule -> rule.setUpdatedAt(system2.now()));
+    RuleDto otherRule = dbTester.rules().insert(rule -> rule.setUpdatedAt(system2.now()));
 
-    CachingRuleFinder underTest = new CachingRuleFinder(dbClient);
+    CachingRuleFinder underTest = new CachingRuleFinder(dbClient, ruleDescriptionFormatter);
 
     assertThat(toRuleKey(underTest.find(RuleQuery.create().withConfigKey(configKey))))
       .isEqualTo(sameConfigKey[1].getKey());
@@ -225,7 +226,7 @@ public class CachingRuleFinderTest {
     String repoKey = "ABCD";
     String ruleKey = "EFGH";
     String configKey = "IJKL";
-    RuleDefinitionDto[] rules = {
+    RuleDto[] rules = {
       dbTester.rules().insert(rule -> rule.setRepositoryKey(repoKey).setRuleKey(ruleKey).setConfigKey(configKey).setUpdatedAt(system2.now())),
       dbTester.rules().insert(rule -> rule.setRuleKey(ruleKey).setConfigKey(configKey).setUpdatedAt(system2.now())),
       dbTester.rules().insert(rule -> rule.setRepositoryKey(repoKey).setConfigKey(configKey).setUpdatedAt(system2.now())),
@@ -239,7 +240,7 @@ public class CachingRuleFinderTest {
     RuleQuery ruleKeyQuery = RuleQuery.create().withKey(ruleKey);
     RuleQuery repoKeyQuery = RuleQuery.create().withRepositoryKey(repoKey);
 
-    CachingRuleFinder underTest = new CachingRuleFinder(dbClient);
+    CachingRuleFinder underTest = new CachingRuleFinder(dbClient, ruleDescriptionFormatter);
 
     assertThat(toRuleKey(underTest.find(allQuery))).isEqualTo(rules[0].getKey());
     assertThat(toRuleKey(underTest.find(ruleAndConfigKeyQuery))).isEqualTo(rules[1].getKey());
@@ -259,19 +260,20 @@ public class CachingRuleFinderTest {
   public void findAll_returns_all_rules_when_RuleQuery_has_no_non_null_field() {
     assertThat(underTest.findAll(RuleQuery.create()))
       .extracting(CachingRuleFinderTest::toRuleKey)
-      .containsOnly(Arrays.stream(ruleDefinitions).map(RuleDefinitionDto::getKey).toArray(RuleKey[]::new));
+      .containsOnly(Arrays.stream(ruleDtos).map(RuleDto::getKey).toArray(RuleKey[]::new));
   }
 
   @Test
   public void findAll_returns_all_rules_with_exact_same_repository_key_and_order_them_most_recent_first() {
     String repoKey = "ABCD";
-    RuleDefinitionDto[] sameRepoKey = {
-      dbTester.rules().insert(rule -> rule.setRepositoryKey(repoKey).setUpdatedAt(system2.now())),
-      dbTester.rules().insert(rule -> rule.setRepositoryKey(repoKey).setUpdatedAt(system2.now()))
+    long currentTimeMillis = System.currentTimeMillis();
+    RuleDto[] sameRepoKey = {
+      dbTester.rules().insert(rule -> rule.setRepositoryKey(repoKey).setUpdatedAt(currentTimeMillis + system2.now())),
+      dbTester.rules().insert(rule -> rule.setRepositoryKey(repoKey).setUpdatedAt(currentTimeMillis + system2.now()))
     };
-    RuleDefinitionDto otherRule = dbTester.rules().insert(rule -> rule.setUpdatedAt(system2.now()));
+    RuleDto otherRule = dbTester.rules().insert(rule -> rule.setUpdatedAt(currentTimeMillis + system2.now()));
 
-    CachingRuleFinder underTest = new CachingRuleFinder(dbClient);
+    CachingRuleFinder underTest = new CachingRuleFinder(dbClient, ruleDescriptionFormatter);
 
     assertThat(underTest.findAll(RuleQuery.create().withRepositoryKey(repoKey)))
       .extracting(CachingRuleFinderTest::toRuleKey)
@@ -288,13 +290,13 @@ public class CachingRuleFinderTest {
   @Test
   public void findAll_returns_all_rules_with_exact_same_rulekey_and_order_them_most_recent_first() {
     String ruleKey = "ABCD";
-    RuleDefinitionDto[] sameRuleKey = {
+    RuleDto[] sameRuleKey = {
       dbTester.rules().insert(rule -> rule.setRuleKey(ruleKey).setUpdatedAt(system2.now())),
       dbTester.rules().insert(rule -> rule.setRuleKey(ruleKey).setUpdatedAt(system2.now()))
     };
-    RuleDefinitionDto otherRule = dbTester.rules().insert(rule -> rule.setUpdatedAt(system2.now()));
+    RuleDto otherRule = dbTester.rules().insert(rule -> rule.setUpdatedAt(system2.now()));
 
-    CachingRuleFinder underTest = new CachingRuleFinder(dbClient);
+    CachingRuleFinder underTest = new CachingRuleFinder(dbClient, ruleDescriptionFormatter);
 
     assertThat(underTest.findAll(RuleQuery.create().withKey(ruleKey)))
       .extracting(CachingRuleFinderTest::toRuleKey)
@@ -311,13 +313,13 @@ public class CachingRuleFinderTest {
   @Test
   public void findAll_returns_all_rules_with_exact_same_configkey_and_order_them_most_recent_first() {
     String configKey = "ABCD";
-    RuleDefinitionDto[] sameConfigKey = {
+    RuleDto[] sameConfigKey = {
       dbTester.rules().insert(rule -> rule.setConfigKey(configKey).setUpdatedAt(system2.now())),
       dbTester.rules().insert(rule -> rule.setConfigKey(configKey).setUpdatedAt(system2.now()))
     };
-    RuleDefinitionDto otherRule = dbTester.rules().insert(rule -> rule.setUpdatedAt(system2.now()));
+    RuleDto otherRule = dbTester.rules().insert(rule -> rule.setUpdatedAt(system2.now()));
 
-    CachingRuleFinder underTest = new CachingRuleFinder(dbClient);
+    CachingRuleFinder underTest = new CachingRuleFinder(dbClient, ruleDescriptionFormatter);
 
     assertThat(underTest.findAll(RuleQuery.create().withConfigKey(configKey)))
       .extracting(CachingRuleFinderTest::toRuleKey)
@@ -336,7 +338,7 @@ public class CachingRuleFinderTest {
     String repoKey = "ABCD";
     String ruleKey = "EFGH";
     String configKey = "IJKL";
-    RuleDefinitionDto[] rules = {
+    RuleDto[] rules = {
       dbTester.rules().insert(rule -> rule.setRepositoryKey(repoKey).setRuleKey(ruleKey).setConfigKey(configKey).setUpdatedAt(system2.now())),
       dbTester.rules().insert(rule -> rule.setRuleKey(ruleKey).setConfigKey(configKey).setUpdatedAt(system2.now())),
       dbTester.rules().insert(rule -> rule.setRepositoryKey(repoKey).setConfigKey(configKey).setUpdatedAt(system2.now())),
@@ -350,7 +352,7 @@ public class CachingRuleFinderTest {
     RuleQuery ruleKeyQuery = RuleQuery.create().withKey(ruleKey);
     RuleQuery repoKeyQuery = RuleQuery.create().withRepositoryKey(repoKey);
 
-    CachingRuleFinder underTest = new CachingRuleFinder(dbClient);
+    CachingRuleFinder underTest = new CachingRuleFinder(dbClient, ruleDescriptionFormatter);
 
     assertThat(underTest.findAll(allQuery))
       .extracting(CachingRuleFinderTest::toRuleKey)
@@ -377,14 +379,14 @@ public class CachingRuleFinderTest {
 
   @Test
   public void findDtoByKey_finds_rules() {
-    for(RuleDefinitionDto dto : ruleDefinitions) {
+    for(RuleDto dto : ruleDtos) {
       assertThat(underTest.findDtoByKey(dto.getKey())).contains(dto);
     }
   }
 
   @Test
   public void findDtoByUuid_finds_rules() {
-    for(RuleDefinitionDto dto : ruleDefinitions) {
+    for(RuleDto dto : ruleDtos) {
       assertThat(underTest.findDtoByUuid(dto.getUuid())).contains(dto);
     }
   }
@@ -401,28 +403,28 @@ public class CachingRuleFinderTest {
 
   @Test
   public void findAll_returns_all_rules() {
-    assertThat(underTest.findAll()).containsOnly(ruleDefinitions);
+    assertThat(underTest.findAll()).containsOnly(ruleDtos);
   }
 
   private static RuleKey toRuleKey(Rule rule) {
     return RuleKey.of(rule.getRepositoryKey(), rule.getKey());
   }
 
-  private void verifyRule(@Nullable Rule rule, RuleDefinitionDto ruleDefinition, RuleParamDto ruleParam) {
+  private void verifyRule(@Nullable Rule rule, RuleDto ruleDto, RuleParamDto ruleParam) {
     assertThat(rule).isNotNull();
 
-    assertThat(rule.getName()).isEqualTo(ruleDefinition.getName());
-    assertThat(rule.getLanguage()).isEqualTo(ruleDefinition.getLanguage());
-    assertThat(rule.getKey()).isEqualTo(ruleDefinition.getRuleKey());
-    assertThat(rule.getConfigKey()).isEqualTo(ruleDefinition.getConfigKey());
-    assertThat(rule.isTemplate()).isEqualTo(ruleDefinition.isTemplate());
-    assertThat(rule.getCreatedAt().getTime()).isEqualTo(ruleDefinition.getCreatedAt());
-    assertThat(rule.getUpdatedAt().getTime()).isEqualTo(ruleDefinition.getUpdatedAt());
-    assertThat(rule.getRepositoryKey()).isEqualTo(ruleDefinition.getRepositoryKey());
-    assertThat(rule.getSeverity().name()).isEqualTo(ruleDefinition.getSeverityString());
-    assertThat(rule.getSystemTags()).isEqualTo(ruleDefinition.getSystemTags().toArray(new String[0]));
+    assertThat(rule.getName()).isEqualTo(ruleDto.getName());
+    assertThat(rule.getLanguage()).isEqualTo(ruleDto.getLanguage());
+    assertThat(rule.getKey()).isEqualTo(ruleDto.getRuleKey());
+    assertThat(rule.getConfigKey()).isEqualTo(ruleDto.getConfigKey());
+    assertThat(rule.isTemplate()).isEqualTo(ruleDto.isTemplate());
+    assertThat(rule.getCreatedAt().getTime()).isEqualTo(ruleDto.getCreatedAt());
+    assertThat(rule.getUpdatedAt().getTime()).isEqualTo(ruleDto.getUpdatedAt());
+    assertThat(rule.getRepositoryKey()).isEqualTo(ruleDto.getRepositoryKey());
+    assertThat(rule.getSeverity().name()).isEqualTo(ruleDto.getSeverityString());
+    assertThat(rule.getSystemTags()).isEqualTo(ruleDto.getSystemTags().toArray(new String[0]));
     assertThat(rule.getTags()).isEmpty();
-    assertThat(rule.getDescription()).isEqualTo(ruleDefinition.getDescription());
+    assertThat(rule.getDescription()).isEqualTo(ruleDto.getDefaultRuleDescriptionSection().getContent());
 
     assertThat(rule.getParams()).hasSize(1);
     org.sonar.api.rules.RuleParam param = rule.getParams().iterator().next();

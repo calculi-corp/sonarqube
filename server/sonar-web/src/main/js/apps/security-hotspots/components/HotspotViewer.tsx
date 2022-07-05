@@ -18,6 +18,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 import * as React from 'react';
+import { getRuleDetails } from '../../../api/rules';
 import { getSecurityHotspotDetails } from '../../../api/security-hotspots';
 import { scrollToElement } from '../../../helpers/scrolling';
 import {
@@ -26,6 +27,7 @@ import {
   HotspotStatusOption
 } from '../../../types/security-hotspots';
 import { Component } from '../../../types/types';
+import { RuleDescriptionSection } from '../../coding-rules/rule';
 import { getStatusFilterFromStatusOption } from '../utils';
 import HotspotViewerRenderer from './HotspotViewerRenderer';
 
@@ -41,6 +43,7 @@ interface Props {
 
 interface State {
   hotspot?: Hotspot;
+  ruleDescriptionSections?: RuleDescriptionSection[];
   lastStatusChangedTo?: HotspotStatusOption;
   loading: boolean;
   showStatusUpdateSuccessModal: boolean;
@@ -74,16 +77,24 @@ export default class HotspotViewer extends React.PureComponent<Props, State> {
     this.mounted = false;
   }
 
-  fetchHotspot = () => {
+  fetchHotspot = async () => {
     this.setState({ loading: true });
-    return getSecurityHotspotDetails(this.props.hotspotKey)
-      .then(hotspot => {
-        if (this.mounted) {
-          this.setState({ hotspot, loading: false });
-        }
-        return hotspot;
-      })
-      .catch(() => this.mounted && this.setState({ loading: false }));
+    try {
+      const hotspot = await getSecurityHotspotDetails(this.props.hotspotKey);
+      const ruleDetails = await getRuleDetails({ key: hotspot.rule.key }).then(r => r.rule);
+
+      if (this.mounted) {
+        this.setState({
+          hotspot,
+          loading: false,
+          ruleDescriptionSections: ruleDetails.descriptionSections
+        });
+      }
+    } catch (error) {
+      if (this.mounted) {
+        this.setState({ loading: false });
+      }
+    }
   };
 
   handleHotspotUpdate = async (statusUpdate = false, statusOption?: HotspotStatusOption) => {
@@ -119,13 +130,20 @@ export default class HotspotViewer extends React.PureComponent<Props, State> {
 
   render() {
     const { component, hotspotsReviewedMeasure, selectedHotspotLocation } = this.props;
-    const { hotspot, lastStatusChangedTo, loading, showStatusUpdateSuccessModal } = this.state;
+    const {
+      hotspot,
+      ruleDescriptionSections,
+      lastStatusChangedTo,
+      loading,
+      showStatusUpdateSuccessModal
+    } = this.state;
 
     return (
       <HotspotViewerRenderer
         component={component}
         commentTextRef={this.commentTextRef}
         hotspot={hotspot}
+        ruleDescriptionSections={ruleDescriptionSections}
         hotspotsReviewedMeasure={hotspotsReviewedMeasure}
         lastStatusChangedTo={lastStatusChangedTo}
         loading={loading}

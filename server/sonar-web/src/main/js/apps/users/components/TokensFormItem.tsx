@@ -17,18 +17,18 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+import classNames from 'classnames';
 import * as React from 'react';
 import { FormattedMessage } from 'react-intl';
 import { revokeToken } from '../../../api/user-tokens';
 import { Button } from '../../../components/controls/buttons';
 import ConfirmButton from '../../../components/controls/ConfirmButton';
-import Tooltip from '../../../components/controls/Tooltip';
+import WarningIcon from '../../../components/icons/WarningIcon';
 import DateFormatter from '../../../components/intl/DateFormatter';
 import DateFromNow from '../../../components/intl/DateFromNow';
 import DeferredSpinner from '../../../components/ui/DeferredSpinner';
 import { translate } from '../../../helpers/l10n';
-import { limitComponentName } from '../../../helpers/path';
-import { UserToken } from '../../../types/types';
+import { UserToken } from '../../../types/token';
 
 export type TokenDeleteConfirmation = 'inline' | 'modal';
 
@@ -43,8 +43,6 @@ interface State {
   loading: boolean;
   showConfirmation: boolean;
 }
-
-const MAX_TOKEN_NAME_FIELD = 20;
 
 export default class TokensFormItem extends React.PureComponent<Props, State> {
   mounted = false;
@@ -86,22 +84,32 @@ export default class TokensFormItem extends React.PureComponent<Props, State> {
     const { deleteConfirmation, token } = this.props;
     const { loading, showConfirmation } = this.state;
     return (
-      <tr>
-        <td>
-          <Tooltip overlay={token.name}>
-            <span>{limitComponentName(token.name, MAX_TOKEN_NAME_FIELD)}</span>
-          </Tooltip>
+      <tr className={classNames({ 'text-muted-2': token.isExpired })}>
+        <td title={token.name} className="hide-overflow nowrap">
+          {token.name}
+          {token.isExpired && (
+            <div className="spacer-top text-warning">
+              <WarningIcon className="little-spacer-right" />
+              {translate('my_account.tokens.expired')}
+            </div>
+          )}
         </td>
-        <td className="nowrap">
+        <td title={translate('users.tokens', token.type)} className="hide-overflow thin">
+          {translate('users.tokens', token.type, 'short')}
+        </td>
+        <td title={token.project?.name} className="hide-overflow">
+          {token.project?.name}
+        </td>
+        <td className="thin nowrap">
           <DateFromNow date={token.lastConnectionDate} hourPrecision={true} />
         </td>
         <td className="thin nowrap text-right">
           <DateFormatter date={token.createdAt} long={true} />
         </td>
+        <td className={classNames('thin nowrap text-right', { 'text-warning': token.isExpired })}>
+          {token.expirationDate ? <DateFormatter date={token.expirationDate} long={true} /> : '–'}
+        </td>
         <td className="thin nowrap text-right">
-          <DeferredSpinner loading={loading}>
-            <i className="deferred-spinner-placeholder" />
-          </DeferredSpinner>
           {deleteConfirmation === 'modal' ? (
             <ConfirmButton
               confirmButtonText={translate('users.tokens.revoke_token')}
@@ -117,7 +125,7 @@ export default class TokensFormItem extends React.PureComponent<Props, State> {
               onConfirm={this.handleRevoke}>
               {({ onClick }) => (
                 <Button
-                  className="spacer-left button-red input-small"
+                  className="button-red input-small"
                   disabled={loading}
                   onClick={onClick}
                   title={translate('users.tokens.revoke_token')}>
@@ -127,9 +135,10 @@ export default class TokensFormItem extends React.PureComponent<Props, State> {
             </ConfirmButton>
           ) : (
             <Button
-              className="button-red input-small spacer-left"
+              className="button-red input-small"
               disabled={loading}
               onClick={this.handleClick}>
+              <DeferredSpinner className="little-spacer-right" loading={loading} />
               {showConfirmation ? translate('users.tokens.sure') : translate('users.tokens.revoke')}
             </Button>
           )}

@@ -20,12 +20,15 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { UserEvent } from '@testing-library/user-event/dist/types/setup';
-import { getMyProjects } from '../../../api/components';
+import selectEvent from 'react-select-event';
+import { getMyProjects, getScannableProjects } from '../../../api/components';
 import NotificationsMock from '../../../api/mocks/NotificationsMock';
 import UserTokensMock from '../../../api/mocks/UserTokensMock';
-import getHistory from '../../../helpers/getHistory';
+import { mockUserToken } from '../../../helpers/mocks/token';
 import { mockCurrentUser, mockLoggedInUser } from '../../../helpers/testMocks';
 import { renderApp } from '../../../helpers/testReactTestingUtils';
+import { Permissions } from '../../../types/permissions';
+import { TokenType } from '../../../types/token';
 import { CurrentUser } from '../../../types/users';
 import routes from '../routes';
 
@@ -96,6 +99,18 @@ jest.mock('../../../api/components', () => ({
         ]
       }
     ]
+  }),
+  getScannableProjects: jest.fn().mockResolvedValue({
+    projects: [
+      {
+        key: 'project-key-1',
+        name: 'Project Name 1'
+      },
+      {
+        key: 'project-key-2',
+        name: 'Project Name 2'
+      }
+    ]
   })
 }));
 
@@ -113,11 +128,21 @@ jest.mock('../../../api/users', () => ({
   changePassword: jest.fn().mockResolvedValue(true)
 }));
 
-it('should handle a currentUser not logged in', async () => {
+it('should handle a currentUser not logged in', () => {
+  const replace = jest.fn();
+  const locationMock = jest.spyOn(window, 'location', 'get').mockReturnValue(({
+    pathname: '/account',
+    search: '',
+    hash: '',
+    replace
+  } as unknown) as Location);
+
   renderAccountApp(mockCurrentUser());
 
   // Make sure we're redirected to the login screen
-  expect(await screen.findByText('/sessions/new?return_to=%2Faccount')).toBeInTheDocument();
+  expect(replace).toBeCalledWith('/sessions/new?return_to=%2Faccount');
+
+  locationMock.mockRestore();
 });
 
 it('should render the top menu', () => {
@@ -192,46 +217,123 @@ describe('security page', () => {
 
   const securityPagePath = 'account/security';
 
-  it('should allow token creation/revoking and display existing tokens', async () => {
-    const user = userEvent.setup();
+  it.each([
+    ['user', TokenType.User],
+    ['global', TokenType.Global],
+    ['project analysis', TokenType.Project]
+  ])(
+    'should allow %s token creation/revocation and display existing tokens',
+    async (_, tokenTypeOption) => {
+      const user = userEvent.setup();
 
-    renderAccountApp(mockLoggedInUser(), securityPagePath);
+      renderAccountApp(
+        mockLoggedInUser({ permissions: { global: [Permissions.Scan] } }),
+        securityPagePath
+      );
+
+      expect(await screen.findByText('users.tokens')).toBeInTheDocument();
+      expect(screen.getAllByRole('row')).toHaveLength(3); // 2 tokens + header
+
+      // Add the token
+      const newTokenName = 'importantToken';
+      const input = screen.getByPlaceholderText('users.enter_token_name');
+      const generateButton = screen.getByRole('button', { name: 'users.generate' });
+      expect(input).toBeInTheDocument();
+      await user.click(input);
+      await user.keyboard(newTokenName);
+
+      expect(generateButton).toBeDisabled();
+
+      const tokenTypeLabel = `users.tokens.${tokenTypeOption}`;
+      const tokenTypeShortLabel = `users.tokens.${tokenTypeOption}.short`;
+
+      if (tokenTypeOption === TokenType.Project) {
+        await selectEvent.select(screen.getAllByRole('textbox')[1], [tokenTypeLabel]);
+        expect(generateButton).toBeDisabled();
+        expect(screen.getAllByRole('textbox')).toHaveLength(3);
+        await selectEvent.select(screen.getAllByRole('textbox')[2], ['Project Name 1']);
+        expect(generateButton).not.toBeDisabled();
+      } else {
+        await selectEvent.select(screen.getAllByRole('textbox')[1], [tokenTypeLabel]);
+        expect(generateButton).not.toBeDisabled();
+      }
+
+      await user.click(generateButton);
+
+      expect(
+        await screen.findByText(`users.tokens.new_token_created.${newTokenName}`)
+      ).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'copy' })).toBeInTheDocument();
+
+      const lastTokenCreated = tokenMock.getTokens().pop();
+      expect(lastTokenCreated).toBeDefined();
+      expect(screen.getByLabelText('users.new_token').textContent).toBe(lastTokenCreated!.token);
+
+      expect(screen.getAllByRole('row')).toHaveLength(4); // 3 tokens + header
+
+      const row = screen.getByRole('row', {
+        name: new RegExp(`^${newTokenName}`)
+      });
+
+      expect(await within(row).findByText(tokenTypeShortLabel)).toBeInTheDocument();
+      if (tokenTypeOption === TokenType.Project) {
+        expect(await within(row).findByText('Project Name 1')).toBeInTheDocument();
+      }
+
+      // Revoke the token
+      const revokeButtons = within(row).getByRole('button', {
+        name: 'users.tokens.revoke_token'
+      });
+      await user.click(revokeButtons);
+
+      expect(
+        screen.getByRole('heading', { name: 'users.tokens.revoke_token' })
+      ).toBeInTheDocument();
+
+      await user.click(screen.getByText('users.tokens.revoke_token', { selector: 'button' }));
+
+      expect(screen.getAllByRole('row')).toHaveLength(3); // 2 tokens + header
+    }
+  );
+
+  it('should flag expired tokens as such', async () => {
+    tokenMock.tokens.push(
+      mockUserToken({
+        name: 'expired token',
+        isExpired: true,
+        expirationDate: '2021-01-23T19:25:19+0000'
+      })
+    );
+
+    renderAccountApp(
+      mockLoggedInUser({ permissions: { global: [Permissions.Scan] } }),
+      securityPagePath
+    );
 
     expect(await screen.findByText('users.tokens')).toBeInTheDocument();
-    expect(screen.getAllByRole('row')).toHaveLength(3); // 2 tokens + header
 
-    // Add a token
-    const newTokenName = 'importantToken';
-    const input = screen.getByRole('textbox');
-    const generateButton = screen.getByRole('button', { name: 'users.generate' });
-    expect(input).toBeInTheDocument();
-    await user.click(input);
-    await user.keyboard(newTokenName);
+    // expired token is flagged as such
+    const expiredTokenRow = screen.getByRole('row', { name: /expired token/ });
+    expect(within(expiredTokenRow).getByText('my_account.tokens.expired')).toBeInTheDocument();
 
-    expect(generateButton).not.toBeDisabled();
-    await user.click(generateButton);
-
+    // unexpired token is not flagged
+    const unexpiredTokenRow = screen.getAllByRole('row')[0];
     expect(
-      await screen.findByText(`users.tokens.new_token_created.${newTokenName}`)
-    ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'copy' })).toBeInTheDocument();
+      within(unexpiredTokenRow).queryByText('my_account.tokens.expired')
+    ).not.toBeInTheDocument();
+  });
 
-    const lastTokenCreated = tokenMock.getTokens().pop();
-    expect(lastTokenCreated).toBeDefined();
-    expect(screen.getByLabelText('users.new_token').textContent).toBe(lastTokenCreated!.token);
+  it("should not suggest creating a Project token if the user doesn't have at least one scannable Projects", async () => {
+    (getScannableProjects as jest.Mock).mockResolvedValueOnce({
+      projects: []
+    });
+    renderAccountApp(
+      mockLoggedInUser({ permissions: { global: [Permissions.Scan] } }),
+      securityPagePath
+    );
 
-    expect(screen.getAllByRole('row')).toHaveLength(4); // 3 tokens + header
-
-    // Revoke a token
-    const revokeButtons = screen.getAllByRole('button', { name: 'users.tokens.revoke_token' });
-    expect(revokeButtons).toHaveLength(3);
-    await user.click(revokeButtons[1]);
-
-    expect(screen.getByRole('heading', { name: 'users.tokens.revoke_token' })).toBeInTheDocument();
-
-    await user.click(screen.getByText('users.tokens.revoke_token', { selector: 'button' }));
-
-    expect(screen.getAllByRole('row')).toHaveLength(3); // 2 tokens + header
+    await selectEvent.openMenu(screen.getAllByRole('textbox')[1]);
+    expect(screen.queryByText(`users.tokens.${TokenType.Project}`)).not.toBeInTheDocument();
   });
 
   it('should allow local users to change password', async () => {
@@ -479,5 +581,5 @@ function getCheckboxByRowName(name: string) {
 }
 
 function renderAccountApp(currentUser: CurrentUser, navigateTo?: string) {
-  renderApp('account', routes, { currentUser, history: getHistory(), navigateTo });
+  renderApp('account', routes, { currentUser, navigateTo });
 }
