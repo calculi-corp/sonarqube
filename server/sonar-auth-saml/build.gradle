@@ -13,6 +13,7 @@ dependencies {
 
     compile "com.onelogin:java-saml:${oneLoginVersion}"
     compile "com.onelogin:java-saml-core:${oneLoginVersion}"
+    compile 'com.fasterxml.woodstox:woodstox-core'
 
     compileOnly 'com.google.code.findbugs:jsr305'
     compileOnly 'com.squareup.okhttp3:okhttp'
